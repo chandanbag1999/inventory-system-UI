@@ -1,219 +1,164 @@
 // ============================================================
-// AUTH STORE - Enterprise Grade with JWT Support
+// AUTH STORE — Zustand + persist, wired to real backend
 // src/shared/store/authStore.ts
 // ============================================================
-
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import apiClient from '../services/api/apiClient';
+import { API_ENDPOINTS } from '../services/api/endpoints';
 import type {
-  User,
-  UserRole,
-  Permission,
+  AuthState,
+  AuthUser,
+  AuthResponse,
+  LoginCredentials,
   Resource,
   Action,
+  UserRole,
 } from '@/modules/auth/types/auth.types';
-import { tokenStorage } from '@/shared/services/api/apiClient';
-import { authService, type LoginRequest, type RegisterRequest } from '@/shared/services/authService';
 
-const roleMapping: Record<string, UserRole> = {
-  'SuperAdmin': 'admin',
-  'Admin': 'admin',
-  'InventoryManager': 'warehouse',
-  'SalesManager': 'seller',
-  'Staff': 'delivery',
-};
-
-const mapBackendRoleToFrontend = (backendRole: string): UserRole => {
-  return roleMapping[backendRole] || 'admin';
-};
-
-const mapBackendPermissionsToFrontend = (permissions: string[]): Permission[] => {
-  return permissions as Permission[];
-};
-
-interface AuthStore {
-  user:            User | null;
-  accessToken:     string | null;
-  refreshToken:    string | null;
-  isAuthenticated: boolean;
-  isLoading:       boolean;
-  isMFARequired:   boolean;
-  permissions:     Permission[];
-  sessionExpiry:   string | null;
-
-  login:          (credentials: LoginRequest) => Promise<boolean>;
-  register:       (data: RegisterRequest) => Promise<boolean>;
-  loginWithToken: (user: User, tokens: { accessToken: string; refreshToken: string }) => void;
-  logout:         () => Promise<void>;
-  setUser:        (user: User) => void;
-  setLoading:     (loading: boolean) => void;
-  updateTokens:   (accessToken: string, refreshToken?: string) => void;
-
-  hasPermission:  (resource: Resource, action: Action) => boolean;
-  hasRole:        (...roles: UserRole[]) => boolean;
-  isAdmin:        () => boolean;
-  isSeller:       () => boolean;
-  isWarehouse:    () => boolean;
-  isDelivery:     () => boolean;
+// ── Map backend role names → frontend UserRole ───────────────
+// Used by ProtectedRoute which checks 'admin' | 'seller' etc.
+function mapToFrontendRole(backendRoles: string[]): UserRole {
+  const lower = backendRoles.map((r) => r.toLowerCase());
+  if (lower.includes('superadmin') || lower.includes('admin')) return 'admin';
+  if (lower.includes('salesmanager') || lower.includes('inventorymanager')) return 'seller';
+  if (lower.includes('warehousemanager') || lower.includes('purchasemanager')) return 'warehouse';
+  if (lower.includes('accountant')) return 'viewer';
+  return 'viewer';
 }
 
-export const useAuthStore = create<AuthStore>()(
+// ── Normalise permission check ───────────────────────────────
+// Backend permissions: "Products.View", "Categories.Create" etc.
+// Frontend calls: hasPermission('product', 'create') or ('Products', 'View')
+function normaliseResource(resource: Resource): string {
+  const map: Record<string, string> = {
+    product:        'Products',
+    category:       'Categories',
+    warehouse:      'Warehouses',
+    stock:          'Stocks',
+    supplier:       'Suppliers',
+    order:          'SalesOrders',
+    user:           'Users',
+  };
+  return map[resource as string] ?? resource;
+}
+
+function normaliseAction(action: Action): string {
+  const map: Record<string, string> = {
+    view:   'View',
+    create: 'Create',
+    update: 'Edit',
+    delete: 'Delete',
+    read:   'View',
+  };
+  return map[action as string] ?? action;
+}
+
+// ── Store ─────────────────────────────────────────────────────
+export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user:            null,
       accessToken:     null,
       refreshToken:    null,
       isAuthenticated: false,
-      isLoading:       false,
-      isMFARequired:   false,
       permissions:     [],
-      sessionExpiry:   null,
 
-      login: async (credentials: LoginRequest) => {
-        set({ isLoading: true });
-        try {
-          const response = await authService.login(credentials);
-          const { accessToken, refreshToken, user: backendUser } = response;
-          
-          tokenStorage.setAccess(accessToken);
-          tokenStorage.setRefresh(refreshToken);
-          
-          const frontendUser: User = {
-            id: backendUser.id,
-            name: backendUser.name || backendUser.firstName + ' ' + backendUser.lastName || backendUser.email,
-            email: backendUser.email,
-            role: mapBackendRoleToFrontend(backendUser.role || backendUser.roles[0]),
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: backendUser.lastLoginAt,
-          };
-          
-          const perms = mapBackendPermissionsToFrontend(backendUser.permissions || []);
-          
-          set({
-            user: frontendUser,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            permissions: perms,
-            isLoading: false,
-            sessionExpiry: accessToken ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
-          });
-          
-          return true;
-        } catch (error) {
-          set({ isLoading: false });
-          console.error('Login failed:', error);
-          return false;
-        }
+      setTokens: (accessToken, refreshToken) => {
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
+        set({ accessToken, refreshToken });
       },
 
-      register: async (data: RegisterRequest) => {
-        set({ isLoading: true });
-        try {
-          const response = await authService.register(data);
-          const { accessToken, refreshToken, user: backendUser } = response;
-          
-          tokenStorage.setAccess(accessToken);
-          tokenStorage.setRefresh(refreshToken);
-          
-          const frontendUser: User = {
-            id: backendUser.id,
-            name: backendUser.name || backendUser.firstName + ' ' + backendUser.lastName || backendUser.email,
-            email: backendUser.email,
-            role: mapBackendRoleToFrontend(backendUser.role || backendUser.roles[0]),
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: backendUser.lastLoginAt,
-          };
-          
-          const perms = mapBackendPermissionsToFrontend(backendUser.permissions || []);
-          
-          set({
-            user: frontendUser,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            permissions: perms,
-            isLoading: false,
-            sessionExpiry: accessToken ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
-          });
-          
-          return true;
-        } catch (error) {
-          set({ isLoading: false });
-          console.error('Registration failed:', error);
-          return false;
-        }
-      },
+      login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+        const { data } = await apiClient.post<{ success: boolean; data: AuthResponse }>(
+          API_ENDPOINTS.AUTH.LOGIN,
+          credentials
+        );
+        const response = data.data;
+        const user: AuthUser = {
+          ...response.user,
+          role: mapToFrontendRole(response.user.roles),
+        };
 
-      loginWithToken: (user, tokens) => {
-        tokenStorage.setAccess(tokens.accessToken);
-        tokenStorage.setRefresh(tokens.refreshToken);
+        localStorage.setItem('accessToken',  response.accessToken);
+        localStorage.setItem('refreshToken', response.refreshToken);
+
         set({
           user,
+          accessToken:     response.accessToken,
+          refreshToken:    response.refreshToken,
           isAuthenticated: true,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          sessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          permissions:     response.user.permissions,
         });
+
+        return { ...response, user };
       },
 
       logout: async () => {
         const { refreshToken } = get();
         try {
           if (refreshToken) {
-            await authService.logout(refreshToken);
+            await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
           }
-        } catch (error) {
-          console.error('Logout API call failed:', error);
+        } catch {
+          // ignore logout errors — always clear local state
         } finally {
-          tokenStorage.clearAll();
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
           set({
             user:            null,
             accessToken:     null,
             refreshToken:    null,
             isAuthenticated: false,
             permissions:     [],
-            sessionExpiry:   null,
-            isMFARequired:   false,
           });
         }
       },
 
-      setUser:    (user)      => set({ user }),
-      setLoading: (isLoading) => set({ isLoading }),
-
-      updateTokens: (accessToken, refreshToken) => {
-        tokenStorage.setAccess(accessToken);
-        if (refreshToken) tokenStorage.setRefresh(refreshToken);
-        set({ accessToken, ...(refreshToken ? { refreshToken } : {}) });
+      getMe: async (): Promise<AuthUser> => {
+        const { data } = await apiClient.get<{ success: boolean; data: AuthUser }>(
+          API_ENDPOINTS.AUTH.ME
+        );
+        const user: AuthUser = {
+          ...data.data,
+          role: mapToFrontendRole(data.data.roles ?? []),
+        };
+        set({ user, permissions: data.data.permissions ?? [], isAuthenticated: true });
+        return user;
       },
 
-      hasPermission: (resource, action) => {
-        const { permissions } = get();
-        return permissions.includes((resource + ':' + action) as Permission);
+      hasPermission: (resource: Resource, action: Action): boolean => {
+        const { permissions, user } = get();
+        if (!user) return false;
+        // SuperAdmin / Admin always have all permissions
+        if (user.roles.some((r) => ['SuperAdmin', 'Admin'].includes(r))) return true;
+        const res = normaliseResource(resource);
+        const act = normaliseAction(action);
+        return permissions.includes(`${res}.${act}`);
       },
 
-      hasRole: (...roles) => {
+      hasRole: (...roles: UserRole[]): boolean => {
         const { user } = get();
-        return !!user && roles.includes(user.role);
+        if (!user) return false;
+        return roles.includes(user.role);
       },
 
-      isAdmin:     () => get().hasRole('admin'),
-      isSeller:    () => get().hasRole('seller'),
-      isWarehouse: () => get().hasRole('warehouse'),
-      isDelivery:  () => get().hasRole('delivery'),
+      isAdmin: () => {
+        const { user } = get();
+        if (!user) return false;
+        return user.roles.some((r) => ['SuperAdmin', 'Admin'].includes(r));
+      },
     }),
     {
-      name: 'auth-store',
+      name:    'auth-store',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user:            state.user,
         accessToken:     state.accessToken,
         refreshToken:    state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         permissions:     state.permissions,
-        sessionExpiry:   state.sessionExpiry,
       }),
     }
   )

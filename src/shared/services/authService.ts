@@ -1,86 +1,57 @@
-import { http, type BackendResponse } from './api/apiClient';
-import { ENDPOINTS } from './api/endpoints';
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  firstName?: string;
-  lastName?: string;
-  name?: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  role: string;
-}
-
-export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
-  user: {
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    name?: string;
-    roles: string[];
-    role: string;
-    permissions: string[];
-    lastLoginAt?: string;
-  };
-}
-
-export interface CurrentUser {
-  id: string;
-  fullName: string;
-  email: string;
-  roles: string[];
-  role: string;
-  permissions: string[];
-  lastLoginAt?: string;
-}
+// ============================================================
+// AUTH SERVICE — thin wrapper around apiClient
+// (Most callers should use authStore.login/logout directly)
+// src/shared/services/authService.ts
+// ============================================================
+import apiClient from './api/apiClient';
+import { API_ENDPOINTS } from './api/endpoints';
+import type { LoginCredentials, RegisterData, AuthResponse } from '@/modules/auth/types/auth.types';
 
 export const authService = {
-  async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await http.post<AuthResponse>(ENDPOINTS.auth.login, {
-      ...data,
-      ipAddress: typeof window !== 'undefined' ? window.location.hostname : undefined,
-      userAgent: typeof window !== 'undefined' ? navigator.userAgent : undefined,
+  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
+    return data.data;
+  },
+
+  register: async (payload: RegisterData) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, payload);
+    return data.data;
+  },
+
+  refreshToken: async (refreshToken: string) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_TOKEN, { refreshToken });
+    return data.data;
+  },
+
+  logout: async (refreshToken: string) => {
+    await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
+  },
+
+  getMe: async () => {
+    const { data } = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+    return data.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, { email });
+    return data;
+  },
+
+  resetPassword: async (payload: { token: string; email: string; newPassword: string }) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, payload);
+    return data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL, { token });
+    return data;
+  },
+
+  changePassword: async (oldPassword: string, newPassword: string) => {
+    const { data } = await apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
+      oldPassword,
+      newPassword,
     });
-    return response.data;
-  },
-
-  async register(data: RegisterRequest): Promise<AuthResponse> {
-    const registerData = {
-      name: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
-      firstName: data.firstName || '',
-      lastName: data.lastName || '',
-      email: data.email,
-      password: data.password,
-      confirmPassword: data.confirmPassword,
-      role: data.role,
-    };
-    const response = await http.post<AuthResponse>(ENDPOINTS.auth.register, registerData);
-    return response.data;
-  },
-
-  async logout(refreshToken: string): Promise<void> {
-    await http.post(ENDPOINTS.auth.logout, { refreshToken });
-  },
-
-  async refreshToken(refreshToken: string): Promise<AuthResponse> {
-    const response = await http.post<AuthResponse>(ENDPOINTS.auth.refresh, {
-      refreshToken,
-    });
-    return response.data;
-  },
-
-  async getCurrentUser(): Promise<CurrentUser> {
-    const response = await http.get<CurrentUser>(ENDPOINTS.auth.me);
-    return response.data;
+    return data;
   },
 };

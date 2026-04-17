@@ -35,11 +35,15 @@ export default function AppSidebar() {
   const location                  = useLocation();
   const { user, logout }          = useAuthStore();
 
+  const userRole = user?.role ?? 'viewer';
+  const displayName = user?.fullName ?? 'User';
+  const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
   const filteredNav = navigation
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => user && item.roles.includes(user.role)
+        (item) => user && item.roles.includes(userRole)
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -91,16 +95,16 @@ export default function AppSidebar() {
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <Link to="/profile"
             className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 hover:ring-2 hover:ring-primary/30 transition-all">
-            {user?.name.charAt(0)}
+            {initials}
           </Link>
           {!collapsed && (
             <Link to="/profile" className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
-              <p className="text-sm font-medium truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
             </Link>
           )}
           {!collapsed && (
-            <button onClick={logout} className="p-1.5 rounded-md hover:bg-sidebar-accent transition-colors" title="Logout">
+            <button onClick={() => logout()} className="p-1.5 rounded-md hover:bg-sidebar-accent transition-colors" title="Logout">
               <LogOut className="h-4 w-4 text-muted-foreground" />
             </button>
           )}

@@ -1,236 +1,190 @@
-import { motion }           from 'framer-motion';
+// ============================================================
+// DASHBOARD PAGE — only calls working backend endpoints
+// Working: auth/me, categories, products, suppliers,
+//          warehouses, stocks/low-stock-alerts, users, roles
+// Missing: sales-orders, purchase-orders
+// src/pages/DashboardPage.tsx
+// ============================================================
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
-  ShoppingCart, Package, DollarSign, TrendingUp,
-  Boxes, Truck, AlertTriangle, Activity,
+  Package, AlertTriangle, Warehouse, RefreshCw,
+  TrendingUp, ShoppingCart, ArrowRight,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
-} from 'recharts';
-import PageTransition, { staggerContainer, staggerItem } from '@/components/PageTransition';
+import PageTransition, { staggerItem, staggerContainer } from '@/components/PageTransition';
 import StatCard   from '@/components/StatCard';
-import StatusBadge from '@/components/StatusBadge';
-import { useAuthStore }  from '@/shared/store/authStore';
-import { useOrderStore } from '@/shared/store/orderStore';
-
-const revenueData = [
-  { month: 'Oct', revenue: 186400 },
-  { month: 'Nov', revenue: 215800 },
-  { month: 'Dec', revenue: 289600 },
-  { month: 'Jan', revenue: 247300 },
-  { month: 'Feb', revenue: 312500 },
-  { month: 'Mar', revenue: 278900 },
-];
-
-const orderTrend = [
-  { day: 'Mon', orders: 42 },
-  { day: 'Tue', orders: 58 },
-  { day: 'Wed', orders: 35 },
-  { day: 'Thu', orders: 67 },
-  { day: 'Fri', orders: 84 },
-  { day: 'Sat', orders: 91 },
-  { day: 'Sun', orders: 63 },
-];
-
-const categoryData = [
-  { name: 'Electronics', value: 35 },
-  { name: 'Apparel',     value: 25 },
-  { name: 'Kitchen',     value: 20 },
-  { name: 'Sports',      value: 12 },
-  { name: 'Other',       value:  8 },
-];
-
-const COLORS = [
-  'hsl(220, 72%, 50%)',
-  'hsl(142, 72%, 40%)',
-  'hsl(38, 92%, 50%)',
-  'hsl(280, 65%, 60%)',
-  'hsl(340, 75%, 55%)',
-];
-
-const activityFeed = [
-  { text: 'New order ORD-7846 placed by Divya Joshi',          time: '2 min ago',  type: 'order'     },
-  { text: 'Low stock alert: USB-C Fast Charger (12 units)',    time: '15 min ago', type: 'alert'     },
-  { text: 'Delivery completed: ORD-7842 by Vikram Singh',      time: '1 hr ago',   type: 'delivery'  },
-  { text: 'Warehouse Chennai Port moved to maintenance',       time: '3 hrs ago',  type: 'warehouse' },
-  { text: 'Bulk stock inbound: 2000 units at Bangalore South', time: '5 hrs ago',  type: 'stock'     },
-];
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge }    from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuthStore }    from '@/shared/store/authStore';
+import { useProducts }     from '@/modules/products/services/productApi';
+import { useWarehouses }   from '@/modules/warehouses/services/warehouseApi';
+import { useLowStockAlerts } from '@/modules/inventory/services/inventoryService';
+import { useSuppliers }    from '@/modules/suppliers/services/supplierApi';
+import { useCategories }   from '@/modules/categories/services/categoryApi';
 
 export default function DashboardPage() {
-  const { user }   = useAuthStore();
-  const orders     = useOrderStore((s) => s.orders);
+  const navigate     = useNavigate();
+  const { user }     = useAuthStore();
 
-  const adminStats = [
-    { title: 'Total Revenue',      value: '₹12,78,900', change: '+12.5% from last month', changeType: 'positive' as const, icon: DollarSign  },
-    { title: 'Total Orders',       value: '1,284',      change: '+8.2% from last month',  changeType: 'positive' as const, icon: ShoppingCart },
-    { title: 'Products Active',    value: '847',        change: '+23 new this week',       changeType: 'positive' as const, icon: Package      },
-    { title: 'Pending Deliveries', value: '42',         change: '6 delayed',              changeType: 'negative' as const, icon: Truck        },
-  ];
-  const warehouseStats = [
-    { title: 'Total Stock Units', value: '8,604', change: '+500 inbound today',  changeType: 'positive' as const, icon: Boxes        },
-    { title: 'Low Stock Items',   value: '3',     change: 'Requires attention',  changeType: 'negative' as const, icon: AlertTriangle },
-    { title: 'Stock Movements',   value: '28',    change: 'Today',               changeType: 'neutral'  as const, icon: Activity     },
-    { title: 'Warehouse Util.',   value: '72%',   change: 'Mumbai Central',      changeType: 'neutral'  as const, icon: Package      },
-  ];
-  const deliveryStats = [
-    { title: 'Active Deliveries', value: '2',    change: '1 in transit', changeType: 'neutral'  as const, icon: Truck        },
-    { title: 'Completed Today',   value: '1',    change: 'On time',      changeType: 'positive' as const, icon: Package      },
-    { title: "Today's Earnings",  value: '₹120', change: '+₹120',        changeType: 'positive' as const, icon: DollarSign   },
-    { title: 'This Month',        value: '₹650', change: '4 deliveries', changeType: 'positive' as const, icon: TrendingUp   },
-  ];
-  const sellerStats = [
-    { title: 'My Revenue',  value: '₹4,82,300', change: '+18.3% this month', changeType: 'positive' as const, icon: DollarSign   },
-    { title: 'My Orders',   value: '342',        change: '+15 today',          changeType: 'positive' as const, icon: ShoppingCart },
-    { title: 'My Products', value: '124',        change: '8 drafts',           changeType: 'neutral'  as const, icon: Package      },
-    { title: 'Avg. Rating', value: '4.7',        change: '+0.2 this month',    changeType: 'positive' as const, icon: TrendingUp   },
-  ];
+  const { data: productsData,   isLoading: pLoad }  = useProducts({ pageSize: 100 });
+  const { data: warehouses = [], isLoading: wLoad } = useWarehouses();
+  const { data: lowStock = [],   isLoading: sLoad } = useLowStockAlerts();
+  const { data: suppliersData,   isLoading: supLoad } = useSuppliers();
+  const { data: categories = [], isLoading: cLoad } = useCategories();
 
-  const stats =
-    user?.role === 'warehouse' ? warehouseStats :
-    user?.role === 'delivery'  ? deliveryStats  :
-    user?.role === 'seller'    ? sellerStats     :
-    adminStats;
+  const products  = productsData?.items ?? [];
+  const suppliers = Array.isArray(suppliersData) ? suppliersData : (suppliersData as any)?.items ?? [];
+
+  const stats = useMemo(() => ({
+    totalProducts:  productsData?.totalCount ?? products.length,
+    activeProducts: products.filter((p) => p.status === 'Active').length,
+    lowStockCount:  lowStock.length,
+    criticalStock:  lowStock.filter((s) => s.quantityAvailable === 0).length,
+    activeWarehouses: warehouses.filter((w) => w.isActive).length,
+    totalSuppliers: suppliers.length,
+    totalCategories: Array.isArray(categories) ? categories.length : 0,
+  }), [products, lowStock, warehouses, suppliers, categories, productsData, suppliersData]);
+
+  const isLoading = pLoad || wLoad || sLoad || supLoad || cLoad;
 
   return (
     <PageTransition>
       <div className="page-container">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Welcome back, {user?.name.split(' ')[0]}</h1>
-            <p className="page-subtitle">Here's what's happening across your operations today.</p>
+            <h1 className="page-title">
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},
+              {' '}{user?.fullName?.split(' ')[0] ?? 'there'} 👋
+            </h1>
+            <p className="page-subtitle">Here's what's happening in your inventory today</p>
           </div>
         </div>
 
-        {/* Stats */}
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-        >
-          {stats.map((s) => <StatCard key={s.title} {...s} />)}
-        </motion.div>
-
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <motion.div
-            variants={staggerItem} initial="hidden" animate="visible"
-            className="lg:col-span-2 glass-card rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold mb-4">Revenue Overview</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))"
-                    tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    formatter={(v: number) => [`₹${v.toLocaleString()}`, 'Revenue']}
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        {isLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : (
+          <motion.div variants={staggerContainer} initial="hidden" animate="visible"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="Total Products" value={String(stats.totalProducts)}
+              icon={Package} changeType="positive"
+              change={`${stats.activeProducts} active`}
+              onClick={() => navigate('/products')}
+            />
+            <StatCard
+              title="Low Stock Alerts" value={String(stats.lowStockCount)}
+              icon={AlertTriangle}
+              changeType={stats.criticalStock > 0 ? 'negative' : 'neutral'}
+              change={stats.criticalStock > 0 ? `${stats.criticalStock} out of stock` : 'All stocked'}
+              onClick={() => navigate('/inventory')}
+            />
+            <StatCard
+              title="Active Warehouses" value={String(stats.activeWarehouses)}
+              icon={Warehouse} changeType="positive"
+              change={`of ${warehouses.length} total`}
+              onClick={() => navigate('/warehouses')}
+            />
+            <StatCard
+              title="Suppliers" value={String(stats.totalSuppliers)}
+              icon={TrendingUp} changeType="neutral"
+              change={`${stats.totalCategories} categories`}
+              onClick={() => navigate('/suppliers')}
+            />
           </motion.div>
+        )}
 
-          <motion.div
-            variants={staggerItem} initial="hidden" animate="visible"
-            className="glass-card rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold mb-4">Sales by Category</h3>
-            <div className="h-64 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
-                    {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap gap-3 mt-2">
-              {categoryData.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-1.5 text-xs">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-                  {c.name}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <motion.div
-            variants={staggerItem} initial="hidden" animate="visible"
-            className="glass-card rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold mb-4">Orders This Week</h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={orderTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="orders" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={staggerItem} initial="hidden" animate="visible"
-            className="lg:col-span-2 glass-card rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold mb-4">Recent Activity</h3>
-            <div className="space-y-3">
-              {activityFeed.map((a, i) => (
-                <div key={i} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">{a.text}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{a.time}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Low Stock Alerts */}
+          <motion.div variants={staggerItem} initial="hidden" animate="visible">
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  Low Stock Alerts
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs"
+                  onClick={() => navigate('/inventory')}>
+                  Manage <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                {sLoad ? (
+                  <div className="p-4 space-y-3">
+                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
                   </div>
-                </div>
-              ))}
-            </div>
+                ) : lowStock.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    🎉 All items are well stocked!
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {lowStock.slice(0, 6).map((s) => (
+                      <div key={s.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium">{s.productName}</p>
+                          <p className="text-xs text-muted-foreground">{s.warehouseName} · SKU: {s.productSku}</p>
+                        </div>
+                        <Badge className={'text-xs ' + (
+                          s.quantityAvailable === 0
+                            ? 'bg-red-500/10 text-red-600 border-0'
+                            : 'bg-amber-500/10 text-amber-600 border-0')}>
+                          {s.quantityAvailable === 0 ? 'Out of stock' : `${s.quantityAvailable} left`}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Warehouses quick view */}
+          <motion.div variants={staggerItem} initial="hidden" animate="visible">
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Warehouses</CardTitle>
+                <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs"
+                  onClick={() => navigate('/warehouses')}>
+                  Manage <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {wLoad ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
+                  </div>
+                ) : warehouses.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    No warehouses configured yet
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {warehouses.slice(0, 6).map((w) => (
+                      <div key={w.id} className="p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Warehouse className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium truncate">{w.name}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[w.city, w.state].filter(Boolean).join(', ') || 'Location not set'}
+                        </p>
+                        <Badge className={'mt-2 text-xs border-0 ' + (
+                          w.isActive ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground')}>
+                          {w.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </motion.div>
         </div>
-
-        {/* Recent Orders Table */}
-        <motion.div
-          variants={staggerItem} initial="hidden" animate="visible"
-          className="glass-card rounded-xl overflow-hidden"
-        >
-          <div className="p-5 pb-3">
-            <h3 className="text-sm font-semibold">Recent Orders</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-5 text-xs font-medium text-muted-foreground">Order</th>
-                  <th className="text-left py-3 px-5 text-xs font-medium text-muted-foreground">Customer</th>
-                  <th className="text-left py-3 px-5 text-xs font-medium text-muted-foreground">Status</th>
-                  <th className="text-right py-3 px-5 text-xs font-medium text-muted-foreground">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.slice(0, 5).map((o) => (
-                  <tr key={o.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-5 font-medium">{o.orderNumber}</td>
-                    <td className="py-3 px-5 text-muted-foreground">{o.customer}</td>
-                    <td className="py-3 px-5"><StatusBadge status={o.status} /></td>
-                    <td className="py-3 px-5 text-right tabular-nums">₹{o.total.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
       </div>
     </PageTransition>
   );

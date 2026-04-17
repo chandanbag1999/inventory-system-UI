@@ -1,69 +1,97 @@
 // ============================================================
-// EDIT PRODUCT PAGE - Fixed
+// EDIT PRODUCT PAGE — real backend
+// GET /api/v1/products/{id}
+// PUT /api/v1/products/{id}  (JSON)
 // src/pages/EditProductPage.tsx
 // ============================================================
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft }              from 'lucide-react';
-import PageTransition             from '@/components/PageTransition';
-import { Button }                 from '@/components/ui/button';
+import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import PageTransition from '@/components/PageTransition';
 import ProductForm, { type ProductFormValues } from '@/components/ProductForm';
-import { useProductStore } from '@/shared/store/productStore';
-import { toast }           from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button }   from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
+import { useProductById, useUpdateProduct } from '@/modules/products/services/productApi';
+import { useCategoryOptions } from '@/modules/categories/services/categoryApi';
 
 export default function EditProductPage() {
-  const { id }        = useParams<{ id: string }>();
-  const navigate      = useNavigate();
-  const product       = useProductStore((s) => s.getProduct(id!));
-  const updateProduct = useProductStore((s) => s.updateProduct);
+  const { id }    = useParams<{ id: string }>();
+  const navigate  = useNavigate();
 
-  if (!product) {
-    return (
-      <div className="page-container flex items-center justify-center py-24">
-        <p className="text-muted-foreground">Product not found.</p>
-      </div>
-    );
-  }
+  const { data: product, isLoading, error } = useProductById(id ?? '');
+  const { data: categoryOptions = [] }      = useCategoryOptions();
+  const updateProduct = useUpdateProduct();
 
-  const onSubmit = (data: ProductFormValues) => {
-    updateProduct(id!, {
-      ...data,
-      weight: data.weight ? Number(data.weight) : undefined,
-    });
-    toast.success('Product updated successfully');
-    navigate('/products/' + id);
+  const handleSubmit = async (values: ProductFormValues) => {
+    if (!id) return;
+    try {
+      const catOption = categoryOptions.find((c) => c.label === values.category || c.value === values.category);
+      const categoryId = catOption?.value ?? values.category;
+
+      await updateProduct.mutateAsync({
+        id,
+        payload: {
+          categoryId,
+          name:        values.name,
+          description: values.description || undefined,
+          unitPrice:   values.price,
+          weightKg:    values.weight ? Number(values.weight) : undefined,
+          status:      values.status === 'active' ? 'Active' : values.status === 'archived' ? 'Archived' : 'Draft',
+        },
+      });
+
+      toast.success('Product updated successfully');
+      navigate(`/products/${id}`);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to update product');
+    }
   };
+
+  if (isLoading) return (
+    <PageTransition>
+      <div className="page-container max-w-3xl space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </div>
+    </PageTransition>
+  );
+
+  if (error || !product) return (
+    <PageTransition>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <p className="text-destructive">Product not found</p>
+        <Button onClick={() => navigate('/products')}><RefreshCw className="h-4 w-4 mr-2" />Back</Button>
+      </div>
+    </PageTransition>
+  );
 
   return (
     <PageTransition>
       <div className="page-container max-w-3xl">
         <div className="page-header">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="page-title">Edit Product</h1>
-              <p className="page-subtitle">{product.name}</p>
-            </div>
+          <div>
+            <h1 className="page-title">Edit Product</h1>
+            <p className="page-subtitle">{product.name}</p>
           </div>
         </div>
         <ProductForm
-          onSubmit={onSubmit}
-          onCancel={() => navigate('/products/' + id)}
-          submitLabel="Save Changes"
-          isEdit
           defaultValues={{
-            name:          product.name,
-            sku:           product.sku,
-            category:      product.category,
-            price:         product.price,
-            stock:         product.stock,
-            status:        product.status,
-            warehouse:     product.warehouse,
-            description:   product.description ?? '',
-            weight:        product.weight ?? undefined,
-            trackInventory:product.trackInventory ?? true,
+            name:     product.name,
+            sku:      product.sku,
+            category: product.categoryName,
+            price:    product.unitPrice,
+            stock:    product.totalStock,
+            status:   product.status.toLowerCase() as any,
+            description: product.description ?? '',
+            warehouse: '',
+            trackInventory: true,
+            weight: product.weightKg ?? undefined,
           }}
+          onSubmit={handleSubmit}
+          onCancel={() => navigate(`/products/${id}`)}
+          submitLabel="Update Product"
+          isEdit
         />
       </div>
     </PageTransition>

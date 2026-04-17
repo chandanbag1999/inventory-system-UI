@@ -1,157 +1,206 @@
-import { useState }                from 'react';
-import { useNavigate, useParams }  from 'react-router-dom';
-import { motion }                  from 'framer-motion';
-import {
-  ArrowLeft, Edit, Trash2, Package,
-  Warehouse, CalendarDays, Tag, BarChart3,
-} from 'lucide-react';
+// ============================================================
+// PRODUCT DETAIL PAGE — real backend
+// GET /api/v1/products/{id}
+// src/pages/ProductDetailPage.tsx
+// ============================================================
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Pencil, Package, Tag, Boxes } from 'lucide-react';
 import PageTransition, { staggerItem } from '@/components/PageTransition';
-import StatusBadge    from '@/components/StatusBadge';
-import { Button }     from '@/components/ui/button';
+import { Button }   from '@/components/ui/button';
+import { Badge }    from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { useProductStore } from '@/shared/store/productStore';
-import { toast }           from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useProductById } from '@/modules/products/services/productApi';
+import { useStockByProduct } from '@/modules/inventory/services/inventoryService';
+import { formatINR, formatDate } from '@/shared/utils/formatters';
+import { cn } from '@/lib/utils';
+
+const statusColor: Record<string, string> = {
+  Active:       'bg-green-500/10 text-green-600',
+  Draft:        'bg-amber-500/10 text-amber-600',
+  Archived:     'bg-muted text-muted-foreground',
+  Discontinued: 'bg-red-500/10 text-red-600',
+};
 
 export default function ProductDetailPage() {
-  const { id }          = useParams<{ id: string }>();
-  const navigate        = useNavigate();
-  const product         = useProductStore((s) => s.getProduct(id!));
-  const deleteProduct   = useProductStore((s) => s.deleteProduct);
-  const [showDelete, setShowDelete] = useState(false);
+  const { id }   = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
-  if (!product) {
-    return (
-      <div className="page-container flex items-center justify-center py-24">
-        <p className="text-muted-foreground">Product not found.</p>
+  const { data: product, isLoading, error } = useProductById(id ?? '');
+  const { data: stocks = [] } = useStockByProduct(id ?? '');
+
+  if (isLoading) return (
+    <PageTransition>
+      <div className="page-container max-w-4xl space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
       </div>
-    );
-  }
+    </PageTransition>
+  );
 
-  const handleDelete = () => {
-    deleteProduct(id!);
-    toast.success('Product deleted');
-    navigate('/products');
-  };
-
-  const stockStatus =
-    product.stock === 0       ? { label: 'Out of Stock', color: 'text-destructive' } :
-    product.stock < 50        ? { label: 'Low Stock',    color: 'text-amber-500'   } :
-                                { label: 'In Stock',     color: 'text-green-500'   };
+  if (error || !product) return (
+    <PageTransition>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <p className="text-destructive">Product not found</p>
+        <Button onClick={() => navigate('/products')}><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      </div>
+    </PageTransition>
+  );
 
   return (
     <PageTransition>
       <div className="page-container max-w-4xl">
-        <div className="page-header">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="page-title">{product.name}</h1>
-              <p className="page-subtitle font-mono text-xs">{product.sku}</p>
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/products')}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="page-title mb-0">{product.name}</h1>
+              <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium',
+                statusColor[product.status] ?? 'bg-muted text-muted-foreground')}>
+                {product.status}
+              </span>
             </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              SKU: <span className="font-mono">{product.sku}</span>
+              {product.barcode && <> · Barcode: <span className="font-mono">{product.barcode}</span></>}
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate("/products/" + id + "/edit")}>
-              <Edit className="h-4 w-4 mr-2" /> Edit
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
-              <Trash2 className="h-4 w-4 mr-2" /> Delete
-            </Button>
-          </div>
+          <Button size="sm" className="gap-2 shrink-0" onClick={() => navigate(`/products/${id}/edit`)}>
+            <Pencil className="h-4 w-4" /> Edit
+          </Button>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          <motion.div variants={staggerItem} initial="hidden" animate="visible">
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Package className="h-4 w-4 text-muted-foreground" /> Product Info
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: 'Name',      value: product.name                            },
-                  { label: 'SKU',       value: product.sku,      mono: true             },
-                  { label: 'Category',  value: product.category                        },
-                  { label: 'Price',     value: "Rs." + product.price.toLocaleString() },
-                  { label: 'Status',    value: <StatusBadge status={product.status} /> },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                    <span className="text-sm text-muted-foreground">{row.label}</span>
-                    {typeof row.value === 'string'
-                      ? <span className={"text-sm font-medium " + (row.mono ? 'font-mono text-xs' : '')}>{row.value}</span>
-                      : row.value
-                    }
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </motion.div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Details */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Primary Image */}
+            {product.primaryImage && (
+              <motion.div variants={staggerItem} initial="hidden" animate="visible">
+                <Card>
+                  <CardContent className="p-4">
+                    <img src={product.primaryImage} alt={product.name}
+                      className="w-full h-64 object-contain rounded-lg bg-muted" />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
-          <motion.div variants={staggerItem} initial="hidden" animate="visible">
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" /> Inventory
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: 'Total Stock',    value: product.stock.toLocaleString()         },
-                  { label: 'Reserved Stock', value: product.reservedStock.toLocaleString() },
-                  { label: 'Available',      value: (product.stock - product.reservedStock).toLocaleString() },
-                  { label: 'Stock Status',   value: <span className={"text-sm font-medium " + stockStatus.color}>{stockStatus.label}</span> },
-                  { label: 'Warehouse',      value: product.warehouse                      },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                    <span className="text-sm text-muted-foreground">{row.label}</span>
-                    {typeof row.value === 'string'
-                      ? <span className="text-sm font-medium">{row.value}</span>
-                      : row.value
-                    }
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </motion.div>
+            {/* Description */}
+            {product.description && (
+              <motion.div variants={staggerItem} initial="hidden" animate="visible">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-base">Description</CardTitle></CardHeader>
+                  <CardContent><p className="text-sm text-muted-foreground">{product.description}</p></CardContent>
+                </Card>
+              </motion.div>
+            )}
 
-          <motion.div variants={staggerItem} initial="hidden" animate="visible">
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" /> Timeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-sm text-muted-foreground">Created</span>
-                  <span className="text-sm font-medium">{new Date(product.createdAt).toLocaleDateString('en-IN')}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+            {/* Stock by Warehouse */}
+            <motion.div variants={staggerItem} initial="hidden" animate="visible">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Boxes className="h-4 w-4 text-muted-foreground" /> Stock by Warehouse
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {stocks.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">No stock data</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="text-left py-2 px-4 text-xs font-semibold text-muted-foreground">Warehouse</th>
+                          <th className="text-right py-2 px-4 text-xs font-semibold text-muted-foreground">On Hand</th>
+                          <th className="text-right py-2 px-4 text-xs font-semibold text-muted-foreground">Reserved</th>
+                          <th className="text-right py-2 px-4 text-xs font-semibold text-muted-foreground">Available</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stocks.map((s) => (
+                          <tr key={s.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2.5 px-4 font-medium">{s.warehouseName}</td>
+                            <td className="py-2.5 px-4 text-right tabular-nums">{s.quantityOnHand}</td>
+                            <td className="py-2.5 px-4 text-right tabular-nums text-muted-foreground">{s.quantityReserved}</td>
+                            <td className={cn('py-2.5 px-4 text-right tabular-nums font-semibold',
+                              s.quantityAvailable === 0 ? 'text-red-600' : s.quantityAvailable < 10 ? 'text-amber-600' : 'text-green-600')}>
+                              {s.quantityAvailable}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+
+          {/* Right: Info */}
+          <div className="space-y-4">
+            {/* Pricing */}
+            <motion.div variants={staggerItem} initial="hidden" animate="visible">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" /> Pricing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Selling Price</span>
+                    <span className="font-bold text-lg">{formatINR(product.unitPrice)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Cost Price</span>
+                    <span className="font-medium">{formatINR(product.costPrice)}</span>
+                  </div>
+                  {product.unitPrice > product.costPrice && (
+                    <div className="flex justify-between items-center pt-1 border-t border-border">
+                      <span className="text-sm text-muted-foreground">Margin</span>
+                      <span className="font-medium text-green-600">
+                        {(((product.unitPrice - product.costPrice) / product.unitPrice) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Details */}
+            <motion.div variants={staggerItem} initial="hidden" animate="visible">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="h-4 w-4 text-muted-foreground" /> Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2.5 text-sm">
+                  {[
+                    { label: 'Category',     value: product.categoryName },
+                    { label: 'Total Stock',  value: String(product.totalStock) },
+                    { label: 'Reorder At',   value: String(product.reorderLevel) },
+                    { label: 'Reorder Qty',  value: String(product.reorderQty) },
+                    { label: 'Weight',       value: product.weightKg ? `${product.weightKg} kg` : '—' },
+                    { label: 'Created',      value: formatDate(product.createdAt) },
+                    { label: 'Updated',      value: formatDate(product.updatedAt) },
+                  ].map((row) => (
+                    <div key={row.label} className="flex justify-between gap-2">
+                      <span className="text-muted-foreground shrink-0">{row.label}</span>
+                      <span className="font-medium text-right">{row.value}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
         </div>
       </div>
-
-      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete product?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove <span className="font-semibold text-foreground">{product.name}</span>. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PageTransition>
   );
 }

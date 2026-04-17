@@ -1,428 +1,333 @@
 // ============================================================
-// DOMAIN TYPES (Products, Orders, Inventory, etc.)
+// DOMAIN TYPES — aligned with backend DTOs exactly
 // src/shared/types/domain.types.ts
 // ============================================================
+import type { AuthUser } from '@/modules/auth/types/auth.types';
+export type { AuthUser as User };
 
-import type { Address } from './common.types';
-
-// ─── PRODUCT ────────────────────────────────────────────────
-
-export interface ProductVariant {
-  id: string;
-  sku: string;
-  attributes: Record<string, string>;
-  price: number;
-  stock: number;
-  barcode?: string;
+// ── Category (matches CategoryDto) ──────────────────────────
+export interface Category {
+  id:          string;
+  name:        string;
+  slug:        string;
+  description?:string | null;
+  imageUrl?:   string | null;
+  parentId?:   string | null;
+  parentName?: string | null;
+  isActive:    boolean;
+  sortOrder:   number;
+  createdAt:   string;
+  updatedAt:   string;
+  children:    Category[];
+  // Computed helpers used in frontend components
+  fullPath:    string;
+  displayOrder:number;
+  productCount:number;
+  // Optional fields from CategoryForm
+  commissionRate?: number | null;
+  metaTitle?:      string | null;
+  metaDescription?:string | null;
 }
 
+// ── Product Image (matches ProductImageDto) ──────────────────
+export interface ProductImage {
+  id:           string;
+  imageUrl:     string;
+  isPrimary:    boolean;
+  displayOrder: number;
+}
+
+// ── Product (matches ProductDto) ────────────────────────────
 export interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  barcode?: string;
-  description?: string;
-  shortDescription?: string;
-  category: string;
-  subCategory?: string;
-  brand?: string;
-  tags?: string[];
-  hsn?: string;
-  price: number;
-  mrp?: number;
-  costPrice?: number;
-  gstRate?: '0' | '5' | '12' | '18' | '28';
-  discount?: number;
-  stock: number;
-  reservedStock: number;
-  minStockLevel?: number;
-  reorderPoint?: number;
-  reorderQuantity?: number;
-  status: 'active' | 'draft' | 'archived';
-  warehouse: string;
-  binLocation?: string;
-  weight?: number;
-  dimensions?: {
-    length: number;
-    width: number;
-    height: number;
-  };
-  images?: string[];
-  hasVariants?: boolean;
-  variants?: ProductVariant[];
-  trackInventory?: boolean;
-  createdAt: string;
-  updatedAt?: string;
+  id:           string;
+  categoryId:   string;
+  categoryName: string;
+  name:         string;
+  slug:         string;
+  description?: string | null;
+  sku:          string;
+  barcode?:     string | null;
+  unitPrice:    number;
+  costPrice:    number;
+  reorderLevel: number;
+  reorderQty:   number;
+  status:       string;        // 'Active' | 'Draft' | 'Archived' | 'Discontinued'
+  weightKg?:    number | null;
+  primaryImage?:string | null;
+  images:       ProductImage[];
+  totalStock:   number;
+  createdAt:    string;
+  updatedAt:    string;
+  // Legacy fields used in existing pages (mapped from DTO)
+  price?:       number;
+  stock?:       number;
+  reservedStock?:number;
+  warehouse?:   string;
 }
 
-export interface ProductFilters {
-  search?: string;
-  category?: string;
-  status?: Product['status'];
-  warehouse?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
-  page: number;
-  pageSize: number;
-  sortKey?: string;
-  sortDir?: 'asc' | 'desc';
+// ── Product List (matches ProductListDto) ────────────────────
+export interface ProductListItem {
+  id:           string;
+  name:         string;
+  sku:          string;
+  categoryName: string;
+  unitPrice:    number;
+  costPrice:    number;
+  status:       string;
+  primaryImage?:string | null;
+  totalStock:   number;
+  createdAt:    string;
 }
 
-// ─── ORDER ──────────────────────────────────────────────────
-
-export interface OrderItem {
-  id: string;
-  productId: string;
-  productName: string;
-  sku: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  discount?: number;
-}
-
-export type OrderStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'processing'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled'
-  | 'returned';
-
-export interface Order {
-  id: string;
-  orderNumber: string;
-  customer: string;
-  email: string;
-  phone?: string;
-  shippingAddress?: Address;
-  billingAddress?: Address;
-  items: number;
-  orderItems?: OrderItem[];
-  subtotal?: number;
-  tax?: number;
-  shippingCost?: number;
-  discount?: number;
-  total: number;
-  status: OrderStatus;
-  paymentStatus?: 'pending' | 'paid' | 'refunded' | 'failed';
-  paymentMethod?: string;
-  notes?: string;
-  internalNotes?: string;
-  createdAt: string;
-  updatedAt?: string;
-  deliveryPartner?: string;
-  warehouse: string;
-  trackingNumber?: string;
-  estimatedDelivery?: string;
-}
-
-export interface OrderFilters {
-  search?: string;
-  status?: OrderStatus;
-  warehouse?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  page: number;
-  pageSize: number;
-  sortKey?: string;
-  sortDir?: 'asc' | 'desc';
-}
-
-// ─── WAREHOUSE ──────────────────────────────────────────────
-
-export type WarehouseStatus = 'active' | 'maintenance' | 'inactive';
-
-export interface Warehouse {
-  id: string;
-  name: string;
-  location: string;
-  address?: Address;
-  capacity: number;
-  utilization: number;
-  manager: string;
-  managerId?: string;
-  status: WarehouseStatus;
-  phone?: string;
-  email?: string;
-  zones?: WarehouseZone[];
-  createdAt?: string;
-}
-
-export interface WarehouseZone {
-  id: string;
-  name: string;
-  type: 'storage' | 'picking' | 'packing' | 'shipping' | 'receiving';
-  capacity: number;
-  utilization: number;
-}
-
-// ─── DELIVERY ───────────────────────────────────────────────
-
-export type DeliveryStatus =
-  | 'assigned'
-  | 'picked_up'
-  | 'in_transit'
-  | 'delivered'
-  | 'failed'
-  | 'returned';
-
-export interface DeliveryLocation {
-  lat: number;
-  lng: number;
-  timestamp: string;
-  address?: string;
-}
-
-export interface Delivery {
-  id: string;
-  orderId: string;
-  orderNumber: string;
-  partner: string;
-  partnerId?: string;
-  status: DeliveryStatus;
-  address: string;
-  shippingAddress?: Address;
-  estimatedTime: string;
-  actualTime?: string;
-  earnings: number;
-  trackingNumber?: string;
-  carrier?: string;
-  awb?: string;
-  proofOfDelivery?: string;
-  failureReason?: string;
-  attempts?: number;
-  locations?: DeliveryLocation[];
-  createdAt?: string;
-}
-
-// ─── STOCK MOVEMENT ─────────────────────────────────────────
-
-export type StockMovementType = 'inbound' | 'outbound' | 'transfer' | 'adjustment' | 'return';
-
-export interface StockMovement {
-  id: string;
-  product: string;
-  productId?: string;
-  sku: string;
-  type: StockMovementType;
-  quantity: number;
-  fromWarehouse?: string;
-  toWarehouse?: string;
-  date: string;
-  reference: string;
-  reason?: string;
-  performedBy?: string;
-  batchNumber?: string;
-  expiryDate?: string;
-  notes?: string;
-}
-
-// ─── SUPPLIER ───────────────────────────────────────────────
-
-export type SupplierStatus = 'active' | 'inactive' | 'blacklisted';
-
+// ── Supplier (matches SupplierDto) ──────────────────────────
 export interface Supplier {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  gstin?: string;
-  address?: Address;
-  paymentTerms?: number;
-  leadTime?: number;
-  rating?: number;
-  status: SupplierStatus;
-  createdAt?: string;
+  id:           string;
+  name:         string;
+  contactPerson?:string | null;
+  email?:       string | null;
+  phone?:       string | null;
+  address?:     string | null;
+  city?:        string | null;
+  state?:       string | null;
+  country?:     string | null;
+  postalCode?:  string | null;
+  gstin?:       string | null;
+  paymentTerms: number;
+  leadTime:     number;
+  notes?:       string | null;
+  isActive:     boolean;
+  createdAt:    string;
+  updatedAt:    string;
+  // Legacy / UI helpers
+  rating?:      number;
+  status?:      string;
+  category?:    string;
+  totalOrders?: number;
+  totalValue?:  number;
 }
 
-// ─── PURCHASE ORDER ─────────────────────────────────────────
-
-export type POStatus =
-  | 'draft'
-  | 'sent'
-  | 'acknowledged'
-  | 'partial'
-  | 'received'
-  | 'cancelled';
-
-export interface POItem {
-  productId: string;
-  productName: string;
-  sku: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  receivedQuantity?: number;
+// ── Warehouse (matches WarehouseDto) ─────────────────────────
+export interface Warehouse {
+  id:          string;
+  name:        string;
+  code?:       string | null;
+  addressLine1?:string | null;
+  addressLine2?:string | null;
+  city?:       string | null;
+  state?:      string | null;
+  country?:    string | null;
+  postalCode?: string | null;
+  phone?:      string | null;
+  email?:      string | null;
+  managerId?:  string | null;
+  isActive:    boolean;
+  createdAt:   string;
+  updatedAt:   string;
+  // Legacy / UI helpers
+  location?:   string;
+  capacity?:   number;
+  utilization?:number;
+  manager?:    string;
+  status?:     string;
 }
 
+// ── Stock (matches StockDto) ─────────────────────────────────
+export interface Stock {
+  id:              string;
+  productId:       string;
+  productName:     string;
+  productSku:      string;
+  warehouseId:     string;
+  warehouseName:   string;
+  quantityOnHand:  number;
+  quantityReserved:number;
+  quantityAvailable:number;
+  reorderLevel:    number;
+  lastMovementAt?: string | null;
+  updatedAt:       string;
+}
+
+// ── Stock Movement ───────────────────────────────────────────
+export interface StockMovement {
+  id:            string;
+  productId:     string;
+  product?:      string;
+  sku?:          string;
+  warehouseId?:  string;
+  type:          string;        // 'StockIn' | 'StockOut' | 'Transfer' | 'Adjustment' | 'Reserved' | 'Released'
+  quantity:      number;
+  reference?:    string | null;
+  notes?:        string | null;
+  createdAt:     string;
+  createdBy?:    string | null;
+  // Legacy UI fields
+  fromWarehouse?:string;
+  toWarehouse?:  string;
+  date?:         string;
+  reason?:       string;
+}
+
+// ── Purchase Order Item ──────────────────────────────────────
+export interface PurchaseOrderItem {
+  id:               string;
+  productId:        string;
+  productName:      string;
+  productSku:       string;
+  quantityOrdered:  number;
+  quantityReceived: number;
+  unitCost:         number;
+  totalCost:        number;
+}
+
+// ── Purchase Order (matches PurchaseOrderDto) ────────────────
 export interface PurchaseOrder {
-  id: string;
-  poNumber: string;
-  supplier: string;
-  supplierId: string;
-  items: POItem[];
-  subtotal: number;
-  tax?: number;
-  total: number;
-  status: POStatus;
-  expectedDate: string;
-  receivedDate?: string;
-  warehouse: string;
-  notes?: string;
-  createdAt: string;
+  id:              string;
+  orderNumber:     string;
+  supplierId:      string;
+  supplierName:    string;
+  warehouseId:     string;
+  warehouseName:   string;
+  status:          string;
+  notes?:          string | null;
+  cancelReason?:   string | null;
+  totalAmount:     number;
+  items:           PurchaseOrderItem[];
+  createdAt:       string;
+  updatedAt:       string;
+  submittedAt?:    string | null;
+  approvedAt?:     string | null;
+  receivedAt?:     string | null;
 }
 
-// ─── RETURN / RMA ───────────────────────────────────────────
-
-export type ReturnStatus =
-  | 'requested'
-  | 'approved'
-  | 'rejected'
-  | 'received'
-  | 'refunded';
-
-export interface ReturnItem {
-  productId: string;
+// ── Sales Order Item ─────────────────────────────────────────
+export interface SalesOrderItem {
+  id:          string;
+  productId:   string;
   productName: string;
-  sku: string;
-  quantity: number;
-  reason: string;
-  condition: 'good' | 'damaged' | 'defective';
+  productSku:  string;
+  quantity:    number;
+  unitPrice:   number;
+  discount:    number;
+  totalPrice:  number;
+}
+
+// ── Sales Order (matches SalesOrderDto) ─────────────────────
+export interface SalesOrder {
+  id:             string;
+  orderNumber:    string;
+  customerId?:    string | null;
+  customerName?:  string | null;
+  customerEmail?: string | null;
+  warehouseId:    string;
+  warehouseName:  string;
+  status:         string;
+  notes?:         string | null;
+  cancelReason?:  string | null;
+  totalAmount:    number;
+  items:          SalesOrderItem[];
+  createdAt:      string;
+  updatedAt:      string;
+  submittedAt?:   string | null;
+  approvedAt?:    string | null;
+  shippedAt?:     string | null;
+  deliveredAt?:   string | null;
+}
+
+// ── Legacy order shape (used in existing OrdersPage) ─────────
+export interface Order {
+  id:              string;
+  orderNumber:     string;
+  customer:        string;
+  email?:          string;
+  items:           number;
+  total:           number;
+  status:          string;
+  createdAt:       string;
+  deliveryPartner?:string;
+  warehouse?:      string;
+}
+
+// ── Delivery ─────────────────────────────────────────────────
+export interface Delivery {
+  id:            string;
+  orderId:       string;
+  orderNumber:   string;
+  partner:       string;
+  status:        string;
+  address:       string;
+  estimatedTime?:string;
+  actualTime?:   string;
+  earnings?:     number;
+}
+
+// ── Return Request ───────────────────────────────────────────
+export interface ReturnItem {
+  productId:   string;
+  productName: string;
+  sku:         string;
+  quantity:    number;
+  reason:      string;
+  condition:   string;
 }
 
 export interface ReturnRequest {
-  id: string;
-  rmaNumber: string;
-  orderId: string;
-  orderNumber: string;
-  customerId?: string;
-  reason: string;
-  items: ReturnItem[];
-  status: ReturnStatus;
-  refundAmount?: number;
-  refundMethod?: string;
-  notes?: string;
-  createdAt: string;
-  resolvedAt?: string;
+  id:           string;
+  rmaNumber:    string;
+  orderId:      string;
+  orderNumber:  string;
+  reason:       string;
+  items:        ReturnItem[];
+  status:       string;
+  refundAmount?:number;
+  createdAt:    string;
 }
 
-// ─── NOTIFICATION ───────────────────────────────────────────
-
-export type NotificationType =
-  | 'order'
-  | 'stock'
-  | 'delivery'
-  | 'system'
-  | 'alert'
-  | 'payment';
-
-export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
-
+// ── Notification ─────────────────────────────────────────────
 export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  read: boolean;
+  id:         string;
+  type:       string;
+  title:      string;
+  message:    string;
+  read:       boolean;
   actionUrl?: string;
-  createdAt: string;
-  priority: NotificationPriority;
-  userId?: string;
+  createdAt:  string;
+  priority?:  string;
 }
 
-// ─── AUDIT LOG ──────────────────────────────────────────────
-
+// ── Audit Log ────────────────────────────────────────────────
 export interface AuditLog {
-  id: string;
-  userId: string;
-  userName: string;
-  userRole: string;
-  action: string;
-  resource: string;
+  id:          string;
+  userId:      string;
+  userName:    string;
+  userRole:    string;
+  action:      string;
+  resource:    string;
   resourceId?: string;
-  oldValue?: Record<string, any>;
-  newValue?: Record<string, any>;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: string;
-  sessionId?: string;
+  oldValue?:   unknown;
+  newValue?:   unknown;
+  timestamp:   string;
+  ipAddress?:  string;
 }
 
-// ─── NAVIGATION ─────────────────────────────────────────────
-
-import type { UserRole } from '@/modules/auth/types/auth.types';
-
-export interface NavItem {
-  title: string;
-  href: string;
-  icon: string;
-  roles: UserRole[];
-  badge?: string | number;
-  badgeVariant?: 'default' | 'destructive' | 'warning';
-  children?: NavItem[];
-}
-
-export interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-// ─── CATEGORY ────────────────────────────────────────────────
-
-export interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  parentId?: string | null;
-  parentName?: string | null;
-  fullPath: string;
-  displayOrder: number;
-  imageUrl?: string | null;
-  isActive: boolean;
-  productCount: number;
-  children: Category[];
-  commissionRate?: number | null;
-  metaTitle?: string | null;
-  metaDescription?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CategoryFormData {
-  name: string;
-  slug?: string;
-  description?: string;
-  parentId?: string;
-  displayOrder?: number;
-  commissionRate?: number;
-  metaTitle?: string;
-  metaDescription?: string;
-}
-
-export interface CategoryOption {
-  value: string;
-  label: string;
-}
-
-// ─── DASHBOARD ──────────────────────────────────────────────
-
+// ── Dashboard Metrics ────────────────────────────────────────
 export interface DashboardMetrics {
-  totalRevenue: number;
-  revenueChange: number;
-  totalOrders: number;
-  ordersChange: number;
-  totalProducts: number;
-  lowStockCount: number;
+  totalRevenue:      number;
+  revenueChange:     number;
+  totalOrders:       number;
+  ordersChange:      number;
+  totalProducts:     number;
+  lowStockCount:     number;
   pendingDeliveries: number;
-  activeWarehouses: number;
+  activeWarehouses:  number;
 }
 
-export interface ChartDataPoint {
-  label: string;
-  value: number;
-  secondaryValue?: number;
+// ── Paged Result (matches backend PagedResult<T>) ────────────
+export interface PagedResult<T> {
+  items:       T[];
+  totalCount:  number;
+  pageNumber:  number;
+  pageSize:    number;
+  totalPages:  number;
+  hasPrevious: boolean;
+  hasNext:     boolean;
 }

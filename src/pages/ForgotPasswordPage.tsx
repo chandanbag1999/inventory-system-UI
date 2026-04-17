@@ -1,119 +1,111 @@
+// ============================================================
+// FORGOT PASSWORD PAGE — wired to real backend
+// POST /api/v1/auth/forgot-password
+// src/pages/ForgotPasswordPage.tsx
+// ============================================================
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Mail, Package } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input }  from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { authService } from '@/shared/services/authService';
+
+const schema = z.object({
+  email: z.string().email('Enter a valid email'),
+});
+type FormValues = z.infer<typeof schema>;
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading]     = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      toast.error('Please enter your email address');
-      return;
-    }
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: '' },
+  });
+
+  const onSubmit = async (values: FormValues) => {
     setLoading(true);
-    setTimeout(() => {
-      setSent(true);
+    try {
+      await authService.forgotPassword(values.email);
+      setSubmitted(true);
+    } catch (err: any) {
+      // Backend always returns 200 even if email not found (security)
+      setSubmitted(true);
+    } finally {
       setLoading(false);
-      toast.success('Reset link sent!');
-    }, 1000);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
+        transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">StockPulse</h1>
-          <p className="text-muted-foreground mt-2 text-sm">Enterprise Inventory & Logistics Platform</p>
+        <div className="flex flex-col items-center mb-8 gap-3">
+          <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center">
+            <Package className="h-8 w-8 text-primary-foreground" />
+          </div>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 space-y-5">
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to login
-          </Link>
-
-          {sent ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-6 space-y-4"
-            >
-              <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-                <CheckCircle className="h-7 w-7 text-primary" />
+        <div className="glass-card rounded-2xl p-8 shadow-xl">
+          {submitted ? (
+            <div className="text-center space-y-4">
+              <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                <Mail className="h-6 w-6 text-green-600" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold">Check your email</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  We've sent a password reset link to <span className="font-medium text-foreground">{email}</span>
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Didn't receive the email?{' '}
-                <button
-                  onClick={() => { setSent(false); }}
-                  className="text-primary hover:underline"
-                >
-                  Try again
-                </button>
+              <h2 className="text-xl font-semibold">Check your email</h2>
+              <p className="text-sm text-muted-foreground">
+                If an account exists with that email, a password reset link has been sent.
               </p>
-            </motion.div>
+              <Link to="/login">
+                <Button variant="outline" className="w-full mt-4 gap-2">
+                  <ArrowLeft className="h-4 w-4" /> Back to login
+                </Button>
+              </Link>
+            </div>
           ) : (
             <>
-              <div>
-                <h2 className="text-lg font-semibold">Forgot your password?</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enter your email address and we'll send you a reset link.
-                </p>
-              </div>
+              <h2 className="text-xl font-semibold mb-1">Forgot password?</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Enter your email and we'll send a reset link.
+              </p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
-                    autoFocus
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="you@example.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? 'Sending…' : 'Send reset link'}
+                  </Button>
+                </form>
+              </Form>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-medium text-sm transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
-                    />
-                  ) : (
-                    'Send Reset Link'
-                  )}
-                </button>
-              </form>
+              <Link to="/login" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mt-4">
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to login
+              </Link>
             </>
           )}
-
-          <p className="text-[11px] text-center text-muted-foreground">
-            Demo mode — no email will actually be sent
-          </p>
         </div>
       </motion.div>
     </div>

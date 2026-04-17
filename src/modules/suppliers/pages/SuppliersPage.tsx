@@ -1,123 +1,136 @@
-import { useState }    from 'react';
-import { motion }      from 'framer-motion';
-import {
-  Plus, MoreHorizontal, Star, Truck,
-  Phone, Mail, FileText, Download,
-} from 'lucide-react';
-import PageTransition, { staggerContainer, staggerItem } from '@/components/PageTransition';
-import StatCard        from '@/components/StatCard';
+// ============================================================
+// SUPPLIERS PAGE — real backend data
+// GET    /api/v1/suppliers
+// POST   /api/v1/suppliers
+// PUT    /api/v1/suppliers/{id}
+// DELETE /api/v1/suppliers/{id}
+// src/modules/suppliers/pages/SuppliersPage.tsx
+// ============================================================
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Plus, Truck, MoreHorizontal, Pencil, Trash2, RefreshCw, Star, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import PageTransition, { staggerItem, staggerContainer } from '@/components/PageTransition';
+import StatCard from '@/components/StatCard';
 import { DataTable, type Column } from '@/shared/components/tables/DataTable';
-import { Button }      from '@/components/ui/button';
-import { Badge }       from '@/components/ui/badge';
-import { Input }       from '@/components/ui/input';
-import { Label }       from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge }  from '@/components/ui/badge';
+import { Input }  from '@/components/ui/input';
+import { Label }  from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useExport } from '@/shared/hooks/useExport';
 import {
-  Dialog, DialogContent, DialogHeader,
-  DialogTitle, DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useExport }   from '@/shared/hooks/useExport';
-import { toast }       from 'sonner';
-import { cn }          from '@/lib/utils';
-import type { Supplier } from '@/modules/suppliers/types/supplier.types';
+  useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
+} from '../services/supplierApi';
+import type { Supplier } from '@/shared/types/domain.types';
+import type { SupplierFormData } from '../types/supplier.types';
+import { cn } from '@/lib/utils';
 
-const mockSuppliers: Supplier[] = [
-  { id:'1', name:'TechComponents India',    email:'tech@components.in',    phone:'+91 98001 11111', gstin:'29ABCDE1234F1Z5', category:'Electronics', paymentTerms:30, leadTime:7,  rating:4.8, status:'active',   totalOrders:142, totalValue:2840000, createdAt:'2024-01-15' },
-  { id:'2', name:'GreenLeaf Organics',      email:'supply@greenleaf.com',  phone:'+91 98001 22222', gstin:'27XYZAB5678G2H6', category:'Beverages',   paymentTerms:15, leadTime:3,  rating:4.5, status:'active',   totalOrders:89,  totalValue:890000,  createdAt:'2024-02-01' },
-  { id:'3', name:'SportsPro Distributors',  email:'orders@sportspro.com',  phone:'+91 98001 33333', gstin:'19PQRST9012I3J7', category:'Sports',      paymentTerms:45, leadTime:14, rating:4.2, status:'active',   totalOrders:56,  totalValue:1120000, createdAt:'2024-03-10' },
-  { id:'4', name:'KitchenKing Wholesale',   email:'b2b@kitchenking.com',   phone:'+91 98001 44444', gstin:'06UVWXY3456K4L8', category:'Kitchen',     paymentTerms:30, leadTime:10, rating:3.8, status:'active',   totalOrders:73,  totalValue:730000,  createdAt:'2024-04-05' },
-  { id:'5', name:'FashionFirst Textiles',   email:'supply@fashionfirst.in',phone:'+91 98001 55555', gstin:'07MNOPQ7890M5N9', category:'Apparel',     paymentTerms:60, leadTime:21, rating:4.1, status:'inactive', totalOrders:34,  totalValue:510000,  createdAt:'2024-05-20' },
-  { id:'6', name:'HomeDecor Suppliers',     email:'info@homedecor.com',    phone:'+91 98001 66666', gstin:'33RSTUV2345O6P0', category:'Home',        paymentTerms:30, leadTime:5,  rating:2.9, status:'blacklisted',totalOrders:12, totalValue:240000,  createdAt:'2024-06-01' },
-];
-
-const statusConfig = {
-  active:      { label:'Active',      color:'bg-green-500/10 text-green-600'  },
-  inactive:    { label:'Inactive',    color:'bg-muted text-muted-foreground'  },
-  blacklisted: { label:'Blacklisted', color:'bg-red-500/10 text-red-600'      },
+const emptyForm: SupplierFormData = {
+  name: '', contactPerson: '', email: '', phone: '',
+  gstin: '', paymentTerms: 30, leadTime: 7, notes: '',
 };
 
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1,2,3,4,5].map((i) => (
-        <Star key={i} className={cn('h-3 w-3',
-          i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
-        )} />
-      ))}
-      <span className="text-xs text-muted-foreground ml-1">{rating}</span>
-    </div>
-  );
-}
-
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(mockSuppliers);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [newSupp, setNewSupp]     = useState({ name:'', email:'', phone:'', category:'Electronics' });
-  const { exportExcel, isExporting } = useExport();
+  const [showDialog, setShowDialog]   = useState(false);
+  const [editTarget, setEditTarget]   = useState<Supplier | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [form, setForm]               = useState<SupplierFormData>(emptyForm);
+  const { exportExcel, isExporting }  = useExport();
 
-  const active      = suppliers.filter((s) => s.status === 'active').length;
-  const totalValue  = suppliers.reduce((a, s) => a + s.totalValue, 0);
-  const avgRating   = (suppliers.reduce((a, s) => a + s.rating, 0) / suppliers.length).toFixed(1);
+  const { data: suppliersData, isLoading, error, refetch } = useSuppliers();
+  const createSupplier = useCreateSupplier();
+  const updateSupplier = useUpdateSupplier();
+  const deleteSupplier = useDeleteSupplier();
 
-  const handleAdd = () => {
-    if (!newSupp.name || !newSupp.email) { toast.error('Fill required fields'); return; }
-    const s: Supplier = {
-      id:           crypto.randomUUID(),
-      name:         newSupp.name,
-      email:        newSupp.email,
-      phone:        newSupp.phone,
-      category:     newSupp.category,
-      paymentTerms: 30,
-      leadTime:     7,
-      rating:       4.0,
-      status:       'active',
-      totalOrders:  0,
-      totalValue:   0,
-      createdAt:    new Date().toISOString().split('T')[0],
-    };
-    setSuppliers((p) => [s, ...p]);
-    setShowAdd(false);
-    setNewSupp({ name:'', email:'', phone:'', category:'Electronics' });
-    toast.success('Supplier added!');
+  // Handle both paged and array responses
+  const suppliers: Supplier[] = Array.isArray(suppliersData)
+    ? suppliersData
+    : (suppliersData as any)?.items ?? [];
+
+  const active = suppliers.filter((s) => s.isActive !== false).length;
+
+  const openAdd = () => { setEditTarget(null); setForm(emptyForm); setShowDialog(true); };
+  const openEdit = (s: Supplier) => {
+    setEditTarget(s);
+    setForm({
+      name:          s.name,
+      contactPerson: s.contactPerson ?? '',
+      email:         s.email ?? '',
+      phone:         s.phone ?? '',
+      gstin:         s.gstin ?? '',
+      paymentTerms:  s.paymentTerms,
+      leadTime:      s.leadTime,
+      notes:         s.notes ?? '',
+    });
+    setShowDialog(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error('Supplier name is required'); return; }
+    try {
+      if (editTarget) {
+        await updateSupplier.mutateAsync({ id: editTarget.id, payload: form });
+        toast.success('Supplier updated');
+      } else {
+        await createSupplier.mutateAsync(form);
+        toast.success('Supplier created');
+      }
+      setShowDialog(false);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Save failed');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteSupplier.mutateAsync(id);
+      toast.success('Supplier deleted');
+      setDeleteTarget(null);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Delete failed');
+    }
   };
 
   const columns: Column<Supplier>[] = [
     {
-      key:'name', label:'Supplier',
-      render:(_, row) => (
+      key: 'name', label: 'Supplier',
+      render: (_, row) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
             {row.name.charAt(0)}
           </div>
           <div>
             <p className="font-medium text-sm">{row.name}</p>
-            <p className="text-xs text-muted-foreground">{row.email}</p>
+            <p className="text-xs text-muted-foreground">{row.email || row.contactPerson || '—'}</p>
           </div>
         </div>
       ),
     },
-    { key:'category', label:'Category', render:(val)=><Badge variant="outline" className="text-xs">{val as string}</Badge> },
-    { key:'phone',    label:'Phone',    render:(val)=><span className="text-sm text-muted-foreground font-mono">{val as string}</span> },
-    { key:'rating',   label:'Rating',   render:(val)=><StarRating rating={val as number} /> },
-    { key:'leadTime', label:'Lead Time',render:(val)=><span className="text-sm">{val as number} days</span> },
-    { key:'paymentTerms', label:'Payment Terms', render:(val)=><span className="text-sm">Net {val as number}</span> },
-    { key:'totalOrders',  label:'Orders',        render:(val)=><span className="tabular-nums font-medium">{val as number}</span> },
+    { key: 'phone',        label: 'Phone',        render: (val) => <span className="text-sm font-mono text-muted-foreground">{(val as string) || '—'}</span> },
+    { key: 'gstin',        label: 'GSTIN',        render: (val) => <span className="text-xs font-mono">{(val as string) || '—'}</span> },
+    { key: 'paymentTerms', label: 'Payment Terms', render: (val) => <span className="text-sm">Net {val as number}</span> },
+    { key: 'leadTime',     label: 'Lead Time',    render: (val) => <span className="text-sm">{val as number} days</span> },
     {
-      key:'totalValue', label:'Total Value',
-      render:(val)=><span className="font-semibold tabular-nums text-green-600">Rs.{((val as number)/100000).toFixed(1)}L</span>,
-    },
-    {
-      key:'status', label:'Status',
-      render:(val)=>{
-        const cfg = statusConfig[val as keyof typeof statusConfig];
-        return <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', cfg.color)}>{cfg.label}</span>;
-      },
+      key: 'isActive', label: 'Status',
+      render: (val) => val !== false
+        ? <Badge className="bg-green-500/10 text-green-600 border-0 text-xs">Active</Badge>
+        : <Badge className="bg-muted text-muted-foreground border-0 text-xs">Inactive</Badge>,
     },
   ];
+
+  if (error) return (
+    <PageTransition>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <p className="text-destructive">Failed to load suppliers</p>
+        <Button onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Retry</Button>
+      </div>
+    </PageTransition>
+  );
 
   return (
     <PageTransition>
@@ -125,79 +138,124 @@ export default function SuppliersPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">Suppliers</h1>
-            <p className="page-subtitle">{suppliers.length} suppliers in your network</p>
+            <p className="page-subtitle">{isLoading ? '...' : `${suppliers.length} suppliers`}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm"
-              onClick={()=>exportExcel(suppliers.map((s)=>({Name:s.name,Email:s.email,Category:s.category,Rating:s.rating,Status:s.status})),'suppliers')}
+              onClick={() => exportExcel(suppliers.map((s) => ({ Name: s.name, Email: s.email, Phone: s.phone, GSTIN: s.gstin, PaymentTerms: s.paymentTerms, LeadTime: s.leadTime })), 'suppliers')}
               disabled={isExporting}>
-              <Download className="h-4 w-4 mr-2" />Export
+              <Download className="h-4 w-4 mr-2" /> Export
             </Button>
-            <Button size="sm" onClick={()=>setShowAdd(true)}>
-              <Plus className="h-4 w-4 mr-2" />Add Supplier
+            <Button size="sm" className="h-9 gap-2" onClick={openAdd}>
+              <Plus className="h-4 w-4" /> Add Supplier
             </Button>
           </div>
         </div>
 
-        <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-          className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { title:'Total Suppliers', value:String(suppliers.length), icon:Truck,    changeType:'neutral'  as const, change:'In network'      },
-            { title:'Active',          value:String(active),           icon:FileText, changeType:'positive' as const, change:'Operational'     },
-            { title:'Total Value',     value:'Rs.'+(totalValue/100000).toFixed(0)+'L', icon:Star, changeType:'positive' as const, change:'All time' },
-            { title:'Avg Rating',      value:String(avgRating),        icon:Star,     changeType:'positive' as const, change:'Out of 5.0'      },
-          ].map((s)=><StatCard key={s.title} {...s} />)}
-        </motion.div>
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-4">
+            {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : (
+          <motion.div variants={staggerContainer} initial="hidden" animate="visible"
+            className="grid grid-cols-2 gap-4">
+            <StatCard title="Total Suppliers" value={String(suppliers.length)} icon={Truck} changeType="neutral"  change="In network" />
+            <StatCard title="Active"           value={String(active)}           icon={Star}  changeType="positive" change="Operational" />
+          </motion.div>
+        )}
 
         <motion.div variants={staggerItem} initial="hidden" animate="visible">
           <DataTable
             data={suppliers}
             columns={columns}
+            isLoading={isLoading}
             searchable
-            searchPlaceholder="Search suppliers by name, email..."
+            searchPlaceholder="Search suppliers..."
             emptyMessage="No suppliers found."
-            defaultSort={{ key:'rating', dir:'desc' }}
+            actions={(row) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem onClick={() => openEdit(row)}>
+                    <Pencil className="h-4 w-4 mr-2" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ id: row.id, name: row.name })}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           />
         </motion.div>
-      </div>
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Add New Supplier</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Company Name <span className="text-destructive">*</span></Label>
-              <Input placeholder="e.g. TechSupply India" value={newSupp.name}
-                onChange={(e)=>setNewSupp((p)=>({...p,name:e.target.value}))} />
+        {/* Add/Edit Dialog */}
+        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{editTarget ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-2">
+              <div className="col-span-2 space-y-1.5">
+                <Label>Company Name <span className="text-destructive">*</span></Label>
+                <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. TechSupply India" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact Person</Label>
+                <Input value={form.contactPerson ?? ''} onChange={(e) => setForm((p) => ({ ...p, contactPerson: e.target.value }))} placeholder="Contact name" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.email ?? ''} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} placeholder="supplier@company.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={form.phone ?? ''} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+91 98000 00000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>GSTIN</Label>
+                <Input value={form.gstin ?? ''} onChange={(e) => setForm((p) => ({ ...p, gstin: e.target.value }))} placeholder="27AABCT1234A1Z5" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Payment Terms (days)</Label>
+                <Input type="number" min="0" value={form.paymentTerms ?? 30} onChange={(e) => setForm((p) => ({ ...p, paymentTerms: Number(e.target.value) }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Lead Time (days)</Label>
+                <Input type="number" min="0" value={form.leadTime ?? 7} onChange={(e) => setForm((p) => ({ ...p, leadTime: Number(e.target.value) }))} />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea value={form.notes ?? ''} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Additional notes..." rows={2} />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Email <span className="text-destructive">*</span></Label>
-              <Input type="email" placeholder="supplier@company.com" value={newSupp.email}
-                onChange={(e)=>setNewSupp((p)=>({...p,email:e.target.value}))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input placeholder="+91 98000 00000" value={newSupp.phone}
-                onChange={(e)=>setNewSupp((p)=>({...p,phone:e.target.value}))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={newSupp.category} onValueChange={(v)=>setNewSupp((p)=>({...p,category:v}))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['Electronics','Beverages','Sports','Kitchen','Apparel','Home','Health','Books'].map((c)=>(
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={()=>setShowAdd(false)}>Cancel</Button>
-            <Button onClick={handleAdd}>Add Supplier</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={createSupplier.isPending || updateSupplier.isPending}>
+                {editTarget ? 'Update' : 'Create'} Supplier
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Dialog */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Supplier</AlertDialogTitle>
+              <AlertDialogDescription>Delete "{deleteTarget?.name}"? This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => deleteTarget && handleDelete(deleteTarget.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </PageTransition>
   );
 }

@@ -1,127 +1,100 @@
 // ============================================================
-// API ENDPOINTS
+// API ENDPOINTS — exact backend routes (BaseApiController uses
+// [Route("api/v1/[controller]")])
 // src/shared/services/api/endpoints.ts
 // ============================================================
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api/v1';
+export const API_ENDPOINTS = {
+  // ── Auth (/api/v1/auth) ──────────────────────────────────
+  AUTH: {
+    LOGIN:          '/auth/login',
+    REGISTER:       '/auth/register',
+    LOGOUT:         '/auth/logout',
+    REFRESH_TOKEN:  '/auth/refresh-token',
+    ME:             '/auth/me',
+    VERIFY_EMAIL:   '/auth/verify-email',
+    FORGOT_PASSWORD:'/auth/forgot-password',
+    RESET_PASSWORD: '/auth/reset-password',
+    CHANGE_PASSWORD:'/auth/change-password',
+  },
 
-export const ENDPOINTS = {
-  auth: {
-    login:          BASE + '/auth/login',
-    register:      BASE + '/auth/register',
-    logout:         BASE + '/auth/logout',
-    refresh:        BASE + '/auth/refresh',
-    forgotPassword: BASE + '/auth/forgot-password',
-    resetPassword:  BASE + '/auth/reset-password',
-    me:             BASE + '/auth/me',
-    mfa:            BASE + '/auth/mfa/verify',
+  // ── Categories (/api/v1/categories) ─────────────────────
+  CATEGORIES: {
+    BASE:          '/categories',
+    BY_ID:         (id: string) => `/categories/${id}`,
+    IMAGE:         (id: string) => `/categories/${id}/image`,
   },
-  products: {
-    list:        BASE + '/products',
-    create:      BASE + '/products',
-    detail:      (id: string) => BASE + '/products/' + id,
-    update:      (id: string) => BASE + '/products/' + id,
-    delete:      (id: string) => BASE + '/products/' + id,
-    bulkDelete:  BASE + '/products/bulk-delete',
-    export:      BASE + '/products/export',
-    import:      BASE + '/products/import',
-    uploadImage: (id: string) => BASE + '/products/' + id + '/images',
+
+  // ── Products (/api/v1/products) ──────────────────────────
+  // NOTE: Create uses multipart/form-data; Update uses JSON
+  PRODUCTS: {
+    BASE:          '/products',
+    BY_ID:         (id: string) => `/products/${id}`,
+    BY_SKU:        (sku: string) => `/products/sku/${sku}`,
+    IMAGES:        (id: string) => `/products/${id}/images`,
+    IMAGE_DELETE:  (id: string, imageId: string) => `/products/${id}/images/${imageId}`,
   },
-  categories: {
-    list:          BASE + '/categories',
-    create:        BASE + '/categories',
-    detail:        (id: string) => BASE + '/categories/' + id,
-    update:        (id: string) => BASE + '/categories/' + id,
-    delete:        (id: string) => BASE + '/categories/' + id,
-    uploadImage:   (id: string) => BASE + '/categories/' + id + '/image',
+
+  // ── Suppliers (/api/v1/suppliers) ────────────────────────
+  SUPPLIERS: {
+    BASE:          '/suppliers',
+    BY_ID:         (id: string) => `/suppliers/${id}`,
   },
-  orders: {
-    list:       BASE + '/orders',
-    create:     BASE + '/orders',
-    detail:     (id: string) => BASE + '/orders/' + id,
-    update:     (id: string) => BASE + '/orders/' + id,
-    delete:     (id: string) => BASE + '/orders/' + id,
-    transition: (id: string) => BASE + '/orders/' + id + '/status',
-    bulkProcess:BASE + '/orders/bulk-process',
-    export:     BASE + '/orders/export',
-    invoice:    (id: string) => BASE + '/orders/' + id + '/invoice',
+
+  // ── Warehouses (/api/v1/warehouses) ─────────────────────
+  WAREHOUSES: {
+    BASE:          '/warehouses',
+    BY_ID:         (id: string) => `/warehouses/${id}`,
   },
-  inventory: {
-    list:      BASE + '/inventory',
-    adjust:    BASE + '/inventory/adjust',
-    movements: BASE + '/inventory/movements',
-    alerts:    BASE + '/inventory/alerts',
-    valuation: BASE + '/inventory/valuation',
-    export:    BASE + '/inventory/export',
+
+  // ── Stocks (/api/v1/stocks) ──────────────────────────────
+  STOCKS: {
+    BY_PRODUCT:       (productId: string) => `/stocks/product/${productId}`,
+    BY_WAREHOUSE:     (warehouseId: string) => `/stocks/warehouse/${warehouseId}`,
+    LOW_STOCK_ALERTS: '/stocks/low-stock-alerts',
+    ADJUST:           '/stocks/adjust',
   },
-  warehouses: {
-    list:   BASE + '/warehouses',
-    create: BASE + '/warehouses',
-    detail: (id: string) => BASE + '/warehouses/' + id,
-    update: (id: string) => BASE + '/warehouses/' + id,
-    delete: (id: string) => BASE + '/warehouses/' + id,
-    zones:  (id: string) => BASE + '/warehouses/' + id + '/zones',
+
+  // ── Purchase Orders (/api/v1/purchase-orders) ───────────
+  PURCHASE_ORDERS: {
+    BASE:          '/purchase-orders',
+    BY_ID:         (id: string) => `/purchase-orders/${id}`,
+    ITEMS:         (id: string) => `/purchase-orders/${id}/items`,
+    ITEM:          (id: string, itemId: string) => `/purchase-orders/${id}/items/${itemId}`,
+    SUBMIT:        (id: string) => `/purchase-orders/${id}/submit`,
+    APPROVE:       (id: string) => `/purchase-orders/${id}/approve`,
+    REJECT:        (id: string) => `/purchase-orders/${id}/reject`,
+    RECEIVE:       (id: string) => `/purchase-orders/${id}/receive`,
+    CANCEL:        (id: string) => `/purchase-orders/${id}/cancel`,
   },
-  deliveries: {
-    list:     BASE + '/deliveries',
-    detail:   (id: string) => BASE + '/deliveries/' + id,
-    update:   (id: string) => BASE + '/deliveries/' + id,
-    assign:   BASE + '/deliveries/assign',
-    track:    (id: string) => BASE + '/deliveries/' + id + '/track',
-    pod:      (id: string) => BASE + '/deliveries/' + id + '/pod',
-    earnings: BASE + '/deliveries/earnings',
-    tasks:    BASE + '/deliveries/tasks',
+
+  // ── Sales Orders (/api/v1/sales-orders) ─────────────────
+  SALES_ORDERS: {
+    BASE:          '/sales-orders',
+    BY_ID:         (id: string) => `/sales-orders/${id}`,
+    ITEMS:         (id: string) => `/sales-orders/${id}/items`,
+    ITEM:          (id: string, itemId: string) => `/sales-orders/${id}/items/${itemId}`,
+    SUBMIT:        (id: string) => `/sales-orders/${id}/submit`,
+    APPROVE:       (id: string) => `/sales-orders/${id}/approve`,
+    SHIP:          (id: string) => `/sales-orders/${id}/ship`,
+    DELIVER:       (id: string) => `/sales-orders/${id}/deliver`,
+    CANCEL:        (id: string) => `/sales-orders/${id}/cancel`,
   },
-  suppliers: {
-    list:   BASE + '/suppliers',
-    create: BASE + '/suppliers',
-    detail: (id: string) => BASE + '/suppliers/' + id,
-    update: (id: string) => BASE + '/suppliers/' + id,
-    delete: (id: string) => BASE + '/suppliers/' + id,
+
+  // ── Users (/api/v1/users) ────────────────────────────────
+  USERS: {
+    BASE:            '/users',
+    BY_ID:           (id: string) => `/users/${id}`,
+    ACTIVATE:        (id: string) => `/users/${id}/activate`,
+    DEACTIVATE:      (id: string) => `/users/${id}/deactivate`,
+    ASSIGN_ROLE:     (id: string) => `/users/${id}/assign-role`,
+    REVOKE_ROLE:     (id: string, roleId: string) => `/users/${id}/revoke-role/${roleId}`,
+    PROFILE_IMAGE:   (id: string) => `/users/${id}/profile-image`,
   },
-  purchaseOrders: {
-    list:    BASE + '/purchase-orders',
-    create:  BASE + '/purchase-orders',
-    detail:  (id: string) => BASE + '/purchase-orders/' + id,
-    update:  (id: string) => BASE + '/purchase-orders/' + id,
-    receive: (id: string) => BASE + '/purchase-orders/' + id + '/receive',
-  },
-  returns: {
-    list:    BASE + '/returns',
-    create:  BASE + '/returns',
-    detail:  (id: string) => BASE + '/returns/' + id,
-    approve: (id: string) => BASE + '/returns/' + id + '/approve',
-    reject:  (id: string) => BASE + '/returns/' + id + '/reject',
-  },
-  notifications: {
-    list:        BASE + '/notifications',
-    markRead:    (id: string) => BASE + '/notifications/' + id + '/read',
-    markAllRead: BASE + '/notifications/read-all',
-    delete:      (id: string) => BASE + '/notifications/' + id,
-    preferences: BASE + '/notifications/preferences',
-  },
-  analytics: {
-    dashboard:  BASE + '/analytics/dashboard',
-    revenue:    BASE + '/analytics/revenue',
-    inventory:  BASE + '/analytics/inventory',
-    orders:     BASE + '/analytics/orders',
-    deliveries: BASE + '/analytics/deliveries',
-    export:     BASE + '/analytics/export',
-  },
-  admin: {
-    users:       BASE + '/admin/users',
-    userDetail:  (id: string) => BASE + '/admin/users/' + id,
-    createUser:  BASE + '/admin/users',
-    updateUser:  (id: string) => BASE + '/admin/users/' + id,
-    deleteUser:  (id: string) => BASE + '/admin/users/' + id,
-    auditLogs:   BASE + '/admin/audit-logs',
-    settings:    BASE + '/admin/settings',
-    systemHealth:BASE + '/admin/health',
-  },
-  profile: {
-    get:            BASE + '/profile',
-    update:         BASE + '/profile',
-    changePassword: BASE + '/profile/password',
-    uploadAvatar:   BASE + '/profile/avatar',
+
+  // ── Roles & Permissions (/api/v1/roles, /api/v1/permissions)
+  ROLES: {
+    BASE:        '/roles',
+    PERMISSIONS: '/permissions',
   },
 } as const;

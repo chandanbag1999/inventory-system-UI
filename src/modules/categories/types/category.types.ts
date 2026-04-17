@@ -1,57 +1,24 @@
 // ============================================================
-// CATEGORY TYPES
+// CATEGORY TYPES — aligned with backend CategoryDto
 // src/modules/categories/types/category.types.ts
 // ============================================================
-
-export interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  parentId?: string | null;
-  parentName?: string | null;
-  fullPath: string;
-  displayOrder: number;
-  imageUrl?: string | null;
-  isActive: boolean;
-  isDeleted?: boolean;
-  deletedAt?: string | null;
-  productCount: number;
-  children: Category[];
-  commissionRate?: number | null;
-  metaTitle?: string | null;
-  metaDescription?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import type { Category } from '@/shared/types/domain.types';
+export type { Category };
 
 export interface CategoryFormData {
-  name: string;
-  slug?: string;
-  description?: string;
-  parentId?: string;
-  displayOrder?: number;
-  commissionRate?: number;
-  metaTitle?: string;
+  name:             string;
+  description?:     string;
+  parentId?:        string;
+  sortOrder?:       number;
+  displayOrder?:    number;
+  slug?:            string;
+  commissionRate?:  number;
+  metaTitle?:       string;
   metaDescription?: string;
+  imageFile?:       File | null;
 }
 
-export interface CategoryOption {
+export interface SelectOption {
   value: string;
   label: string;
 }
-
-export interface CategoryCreateRequest {
-  name: string;
-  slug?: string;
-  description?: string;
-  parentId?: string;
-  displayOrder?: number;
-  commissionRate?: number;
-  metaTitle?: string;
-  metaDescription?: string;
-}
-
-export type CategoryUpdateRequest = CategoryCreateRequest;
-
-export type { Category as CategoryResponse };

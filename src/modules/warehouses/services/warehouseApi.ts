@@ -1,70 +1,98 @@
 // ============================================================
-// WAREHOUSE API - TanStack Query Hooks
+// WAREHOUSE API — React Query hooks
+// Backend: GET    /api/v1/warehouses?isActive=true
+//          GET    /api/v1/warehouses/{id}
+//          POST   /api/v1/warehouses   JSON
+//          PUT    /api/v1/warehouses/{id} JSON
+//          DELETE /api/v1/warehouses/{id}
 // src/modules/warehouses/services/warehouseApi.ts
 // ============================================================
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { warehouseService } from './warehouseService';
-import type { Warehouse, WarehouseFilters } from '@/shared/types';
-import type { ApiResponse, PaginatedResponse } from '@/shared/types/common.types';
+import apiClient from '@/shared/services/api/apiClient';
+import { API_ENDPOINTS } from '@/shared/services/api/endpoints';
+import { QUERY_KEYS } from '@/shared/services/api/queryKeys';
+import type { Warehouse } from '@/shared/types/domain.types';
 
-const WAREHOUSES_KEY = ['warehouses'];
+export interface WarehouseFormData {
+  name:          string;
+  code?:         string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?:         string;
+  state?:        string;
+  country?:      string;
+  postalCode?:   string;
+  phone?:        string;
+  email?:        string;
+  managerId?:    string;
+  isActive?:     boolean;
+}
 
-export const useWarehouses = (filters?: WarehouseFilters) => {
+export const warehouseApiClient = {
+  getAll: async (isActive?: boolean): Promise<Warehouse[]> => {
+    const { data } = await apiClient.get(API_ENDPOINTS.WAREHOUSES.BASE, {
+      params: isActive !== undefined ? { isActive } : {},
+    });
+    return data.data ?? [];
+  },
+
+  getById: async (id: string): Promise<Warehouse> => {
+    const { data } = await apiClient.get(API_ENDPOINTS.WAREHOUSES.BY_ID(id));
+    return data.data;
+  },
+
+  create: async (payload: WarehouseFormData): Promise<Warehouse> => {
+    const { data } = await apiClient.post(API_ENDPOINTS.WAREHOUSES.BASE, payload);
+    return data.data;
+  },
+
+  update: async (id: string, payload: WarehouseFormData): Promise<Warehouse> => {
+    const { data } = await apiClient.put(API_ENDPOINTS.WAREHOUSES.BY_ID(id), payload);
+    return data.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.WAREHOUSES.BY_ID(id));
+  },
+};
+
+export function useWarehouses(isActive?: boolean) {
   return useQuery({
-    queryKey: [...WAREHOUSES_KEY, filters],
-    queryFn: () => warehouseService.getWarehouses(filters) as Promise<ApiResponse<PaginatedResponse<Warehouse>>>,
-    select: (response) => response.data,
-    staleTime: 10 * 60 * 1000,
+    queryKey: [...QUERY_KEYS.WAREHOUSES, isActive],
+    queryFn:  () => warehouseApiClient.getAll(isActive),
+    staleTime: 5 * 60 * 1000,
   });
-};
+}
 
-export const useWarehouse = (id: string) => {
+export function useWarehouseById(id: string) {
   return useQuery({
-    queryKey: [...WAREHOUSES_KEY, id],
-    queryFn: () => warehouseService.getWarehouse(id) as Promise<ApiResponse<Warehouse>>,
-    select: (response) => response.data,
-    enabled: !!id,
-    staleTime: 10 * 60 * 1000,
+    queryKey: QUERY_KEYS.WAREHOUSE(id),
+    queryFn:  () => warehouseApiClient.getById(id),
+    enabled:  !!id,
   });
-};
+}
 
-export const useCreateWarehouse = () => {
-  const queryClient = useQueryClient();
+export function useCreateWarehouse() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Warehouse>) => warehouseService.createWarehouse(data) as Promise<ApiResponse<Warehouse>>,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WAREHOUSES_KEY });
-    },
+    mutationFn: (payload: WarehouseFormData) => warehouseApiClient.create(payload),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
   });
-};
+}
 
-export const useUpdateWarehouse = () => {
-  const queryClient = useQueryClient();
+export function useUpdateWarehouse() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Warehouse> }) =>
-      warehouseService.updateWarehouse(id, data) as Promise<ApiResponse<Warehouse>>,
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: WAREHOUSES_KEY });
-      queryClient.invalidateQueries({ queryKey: [...WAREHOUSES_KEY, id] });
-    },
+    mutationFn: ({ id, payload }: { id: string; payload: WarehouseFormData }) =>
+      warehouseApiClient.update(id, payload),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
   });
-};
+}
 
-export const useDeleteWarehouse = () => {
-  const queryClient = useQueryClient();
+export function useDeleteWarehouse() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => warehouseService.deleteWarehouse(id) as Promise<ApiResponse<void>>,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WAREHOUSES_KEY });
-    },
+    mutationFn: (id: string) => warehouseApiClient.delete(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
   });
-};
-
-export const useWarehouseZones = (id: string) => {
-  return useQuery({
-    queryKey: [...WAREHOUSES_KEY, id, 'zones'],
-    queryFn: () => warehouseService.getWarehouseZones(id),
-    enabled: !!id,
-  });
-};
+}

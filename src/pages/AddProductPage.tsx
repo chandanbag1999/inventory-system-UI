@@ -1,55 +1,58 @@
 // ============================================================
-// ADD PRODUCT PAGE - Fixed
+// ADD PRODUCT PAGE — real backend
+// POST /api/v1/products  (multipart/form-data)
 // src/pages/AddProductPage.tsx
 // ============================================================
-import { useNavigate }  from 'react-router-dom';
-import { ArrowLeft }    from 'lucide-react';
-import PageTransition   from '@/components/PageTransition';
-import { Button }       from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import PageTransition from '@/components/PageTransition';
 import ProductForm, { type ProductFormValues } from '@/components/ProductForm';
-import { useProductStore } from '@/shared/store/productStore';
-import { toast }           from 'sonner';
+import { useCreateProduct } from '@/modules/products/services/productApi';
+import { useCategoryOptions } from '@/modules/categories/services/categoryApi';
+import { useWarehouses } from '@/modules/warehouses/services/warehouseApi';
 
 export default function AddProductPage() {
-  const navigate   = useNavigate();
-  const addProduct = useProductStore((s) => s.addProduct);
+  const navigate      = useNavigate();
+  const createProduct = useCreateProduct();
+  const { data: categoryOptions = [] } = useCategoryOptions();
+  const { data: warehouses = [] }      = useWarehouses(true);
 
-  const onSubmit = (data: ProductFormValues) => {
-    addProduct({
-      name:          data.name,
-      sku:           data.sku,
-      category:      data.category,
-      price:         data.price,
-      stock:         data.stock,
-      reservedStock: 0,
-      status:        data.status,
-      warehouse:     data.warehouse,
-      description:   data.description,
-      weight:        data.weight ? Number(data.weight) : undefined,
-      trackInventory:data.trackInventory,
-    });
-    toast.success('Product added successfully');
-    navigate('/products');
+  const handleSubmit = async (values: ProductFormValues) => {
+    try {
+      // Find categoryId from selected category name
+      const catOption = categoryOptions.find((c) => c.label === values.category || c.value === values.category);
+      const categoryId = catOption?.value ?? values.category;
+
+      await createProduct.mutateAsync({
+        categoryId,
+        name:        values.name,
+        sku:         values.sku,
+        description: values.description || undefined,
+        unitPrice:   values.price,
+        costPrice:   0,
+        weightKg:    values.weight ? Number(values.weight) : undefined,
+      });
+
+      toast.success('Product created successfully');
+      navigate('/products');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to create product');
+    }
   };
 
   return (
     <PageTransition>
       <div className="page-container max-w-3xl">
         <div className="page-header">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="page-title">Add Product</h1>
-              <p className="page-subtitle">Create a new product in your catalog</p>
-            </div>
+          <div>
+            <h1 className="page-title">Add Product</h1>
+            <p className="page-subtitle">Create a new product in your catalogue</p>
           </div>
         </div>
         <ProductForm
-          onSubmit={onSubmit}
+          onSubmit={handleSubmit}
           onCancel={() => navigate('/products')}
-          submitLabel="Add Product"
+          submitLabel="Create Product"
         />
       </div>
     </PageTransition>

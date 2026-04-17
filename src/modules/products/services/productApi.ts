@@ -1,67 +1,196 @@
 // ============================================================
-// PRODUCT API - TanStack Query Hooks
+// PRODUCT API — React Query hooks for products
+// Backend: GET    /api/v1/products           (query params supported)
+//          GET    /api/v1/products/{id}
+//          GET    /api/v1/products/sku/{sku}
+//          POST   /api/v1/products           multipart/form-data
+//          PUT    /api/v1/products/{id}      JSON (UpdateProductCommand)
+//          DELETE /api/v1/products/{id}
+//          POST   /api/v1/products/{id}/images
+//          DELETE /api/v1/products/{id}/images/{imageId}
 // src/modules/products/services/productApi.ts
 // ============================================================
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { productService } from './productService';
-import type { Product, ProductFilters } from '@/shared/types';
+import apiClient from '@/shared/services/api/apiClient';
+import { API_ENDPOINTS } from '@/shared/services/api/endpoints';
+import { QUERY_KEYS } from '@/shared/services/api/queryKeys';
+import type { Product, ProductListItem, PagedResult } from '@/shared/types/domain.types';
 
-const PRODUCTS_KEY = ['products'];
+// ── Query param types ────────────────────────────────────────
+export interface GetAllProductsParams {
+  pageNumber?:  number;
+  pageSize?:    number;
+  search?:      string;
+  categoryId?:  string;
+  status?:      string;
+  sortBy?:      string;
+  sortDesc?:    boolean;
+}
 
-export const useProducts = (filters?: ProductFilters) => {
-  return useQuery({
-    queryKey: [...PRODUCTS_KEY, filters],
-    queryFn: () => productService.getProducts(filters),
-    staleTime: 5 * 60 * 1000,
-  });
+// ── Create payload (mirrors CreateProductRequestDto) ─────────
+export interface CreateProductPayload {
+  categoryId:   string;
+  name:         string;
+  sku:          string;
+  description?: string;
+  unitPrice:    number;
+  costPrice:    number;
+  reorderLevel?:number;
+  reorderQty?:  number;
+  barcode?:     string;
+  weightKg?:    number;
+  images?:      File[];
+}
+
+// ── Update payload (mirrors UpdateProductCommand) ────────────
+export interface UpdateProductPayload {
+  categoryId?:  string;
+  name?:        string;
+  description?: string;
+  unitPrice?:   number;
+  costPrice?:   number;
+  reorderLevel?:number;
+  reorderQty?:  number;
+  barcode?:     string;
+  weightKg?:    number;
+  status?:      string;
+}
+
+// ── Raw API functions ────────────────────────────────────────
+export const productApiClient = {
+  getAll: async (params?: GetAllProductsParams): Promise<PagedResult<ProductListItem>> => {
+    const { data } = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, { params });
+    return data.data;
+  },
+
+  getById: async (id: string): Promise<Product> => {
+    const { data } = await apiClient.get(API_ENDPOINTS.PRODUCTS.BY_ID(id));
+    return data.data;
+  },
+
+  getBySku: async (sku: string): Promise<Product> => {
+    const { data } = await apiClient.get(API_ENDPOINTS.PRODUCTS.BY_SKU(sku));
+    return data.data;
+  },
+
+  // POST uses multipart/form-data
+  create: async (payload: CreateProductPayload): Promise<Product> => {
+    const form = new FormData();
+    form.append('categoryId',   payload.categoryId);
+    form.append('name',         payload.name);
+    form.append('sku',          payload.sku);
+    form.append('unitPrice',    String(payload.unitPrice));
+    form.append('costPrice',    String(payload.costPrice));
+    if (payload.description)  form.append('description',  payload.description);
+    if (payload.reorderLevel) form.append('reorderLevel', String(payload.reorderLevel));
+    if (payload.reorderQty)   form.append('reorderQty',   String(payload.reorderQty));
+    if (payload.barcode)      form.append('barcode',      payload.barcode);
+    if (payload.weightKg)     form.append('weightKg',     String(payload.weightKg));
+    if (payload.images) {
+      payload.images.forEach((file) => form.append('Images', file));
+    }
+    const { data } = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data;
+  },
+
+  // PUT uses JSON
+  update: async (id: string, payload: UpdateProductPayload): Promise<Product> => {
+    const { data } = await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(id), payload);
+    return data.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
+  },
+
+  uploadImages: async (id: string, files: File[]): Promise<string[]> => {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    const { data } = await apiClient.post(API_ENDPOINTS.PRODUCTS.IMAGES(id), form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data.imageUrls;
+  },
+
+  deleteImage: async (id: string, imageId: string): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.PRODUCTS.IMAGE_DELETE(id, imageId));
+  },
 };
 
-export const useProduct = (id: string) => {
-  return useQuery({
-    queryKey: [...PRODUCTS_KEY, id],
-    queryFn: () => productService.getProduct(id),
-    enabled: !!id,
-    staleTime: 2 * 60 * 1000,
-  });
-};
+// ── React Query Hooks ────────────────────────────────────────
 
-export const useCreateProduct = () => {
-  const queryClient = useQueryClient();
+export function useProducts(params?: GetAllProductsParams) {
+  return useQuery({
+    queryKey: QUERY_KEYS.PRODUCTS_FILTERED(params ?? {}),
+    queryFn:  () => productApiClient.getAll(params),
+    staleTime: 3 * 60 * 1000,
+  });
+}
+
+export function useProductById(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.PRODUCT(id),
+    queryFn:  () => productApiClient.getById(id),
+    enabled:  !!id,
+  });
+}
+
+export function useProductBySku(sku: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.PRODUCT_BY_SKU(sku),
+    queryFn:  () => productApiClient.getBySku(sku),
+    enabled:  !!sku,
+  });
+}
+
+export function useCreateProduct() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Product>) => productService.createProduct(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    mutationFn: (payload: CreateProductPayload) => productApiClient.create(payload),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCTS }); },
+  });
+}
+
+export function useUpdateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateProductPayload }) =>
+      productApiClient.update(id, payload),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCTS });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT(id) });
     },
   });
-};
+}
 
-export const useUpdateProduct = () => {
-  const queryClient = useQueryClient();
+export function useDeleteProduct() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Product> }) =>
-      productService.updateProduct(id, data),
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
-      queryClient.invalidateQueries({ queryKey: [...PRODUCTS_KEY, id] });
+    mutationFn: (id: string) => productApiClient.delete(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCTS }); },
+  });
+}
+
+export function useUploadProductImages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, files }: { id: string; files: File[] }) =>
+      productApiClient.uploadImages(id, files),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT(id) });
     },
   });
-};
+}
 
-export const useDeleteProduct = () => {
-  const queryClient = useQueryClient();
+export function useDeleteProductImage() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => productService.deleteProduct(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    mutationFn: ({ id, imageId }: { id: string; imageId: string }) =>
+      productApiClient.deleteImage(id, imageId),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.PRODUCT(id) });
     },
   });
-};
-
-export const useCategories = () => {
-  return useQuery({
-    queryKey: ['categories'],
-    queryFn: () => productService.getCategories(),
-    staleTime: 10 * 60 * 1000,
-  });
-};
+}

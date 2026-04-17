@@ -1,88 +1,123 @@
 // ============================================================
-// AUTH TYPES
+// AUTH TYPES — aligned with backend UserInfoDto
+// Backend roles: SuperAdmin, Admin, InventoryManager,
+//   WarehouseManager, PurchaseManager, SalesManager,
+//   Accountant, Viewer
+// Backend permissions: "Module.Action" e.g. "Products.View"
 // src/modules/auth/types/auth.types.ts
 // ============================================================
 
-export type UserRole = 'admin' | 'seller' | 'warehouse' | 'delivery';
+// ── Backend role names (exact strings from seeded Roles table)
+export type BackendRole =
+  | 'SuperAdmin'
+  | 'Admin'
+  | 'InventoryManager'
+  | 'WarehouseManager'
+  | 'PurchaseManager'
+  | 'SalesManager'
+  | 'Accountant'
+  | 'Viewer';
 
+// ── Keep legacy UserRole for ProtectedRoute compatibility
+// Maps frontend nav role names → backend role groups
+export type UserRole = 'admin' | 'seller' | 'warehouse' | 'delivery' | 'superadmin' | 'viewer';
+
+// ── Permission modules (backend Module field)
 export type Resource =
-  | 'dashboard'
-  | 'products'
-  | 'orders'
-  | 'inventory'
-  | 'warehouses'
-  | 'deliveries'
-  | 'stock_movements'
-  | 'suppliers'
-  | 'returns'
-  | 'analytics'
-  | 'notifications'
-  | 'users'
-  | 'settings'
-  | 'audit';
+  | 'Users'
+  | 'Roles'
+  | 'Categories'
+  | 'Products'
+  | 'Warehouses'
+  | 'Stocks'
+  | 'Suppliers'
+  | 'PurchaseOrders'
+  | 'SalesOrders'
+  // legacy aliases used in existing frontend code
+  | 'product'
+  | 'category'
+  | 'warehouse'
+  | 'stock'
+  | 'supplier'
+  | 'order'
+  | 'user';
 
+// ── Permission actions (backend Action part)
 export type Action =
+  | 'View'
+  | 'Create'
+  | 'Edit'
+  | 'Delete'
+  | 'Adjust'
+  | 'Approve'
+  | 'Receive'
+  | 'Cancel'
+  | 'Ship'
+  | 'Deliver'
+  | 'AssignRole'
+  // legacy aliases
   | 'view'
   | 'create'
-  | 'edit'
+  | 'update'
   | 'delete'
-  | 'export'
-  | 'approve'
-  | 'assign';
+  | 'read';
 
-export type Permission = string;
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  avatar?: string;
-  phone?: string;
-  timezone?: string;
-  isActive: boolean;
-  createdAt: string;
-  lastLoginAt?: string;
+// ── User object — matches backend UserInfoDto exactly
+export interface AuthUser {
+  id:              string;
+  fullName:        string;
+  email:           string;
+  phone?:          string | null;
+  profileImageUrl?:string | null;
+  status:          string;
+  isEmailVerified: boolean;
+  roles:           string[];           // e.g. ["Admin", "InventoryManager"]
+  permissions:     string[];           // e.g. ["Products.View", "Products.Create"]
+  lastLoginAt?:    string | null;
+  createdAt:       string;
+  // Computed helper — primary role mapped to frontend UserRole
+  role:            UserRole;
 }
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-}
+// Legacy alias used throughout existing pages
+export type User = AuthUser;
 
+// ── Login request
 export interface LoginCredentials {
-  email: string;
+  email:    string;
   password: string;
-  rememberMe?: boolean;
 }
 
-export interface AuthState {
-  user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  isMFARequired: boolean;
-  permissions: Permission[];
-  sessionExpiry: string | null;
-}
-
-export interface MFAVerification {
-  code: string;
-  method: 'totp' | 'sms' | 'email';
-}
-
-export interface PasswordReset {
-  token: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
+// ── Register request
 export interface RegisterData {
-  name: string;
-  email: string;
+  fullName: string;
+  email:    string;
   password: string;
-  role: UserRole;
-  phone?: string;
+  phone?:   string;
+}
+
+// ── Backend login response (data field of ApiResponse)
+export interface AuthResponse {
+  accessToken:  string;
+  refreshToken: string;
+  expiresIn:    number;
+  tokenType:    string;
+  user:         AuthUser;
+}
+
+// ── Zustand auth store state + actions
+export interface AuthState {
+  user:            AuthUser | null;
+  accessToken:     string | null;
+  refreshToken:    string | null;
+  isAuthenticated: boolean;
+  permissions:     string[];
+
+  login:           (credentials: LoginCredentials) => Promise<AuthResponse>;
+  logout:          () => Promise<void>;
+  getMe:           () => Promise<AuthUser>;
+  setTokens:       (accessToken: string, refreshToken: string) => void;
+  hasPermission:   (resource: Resource, action: Action) => boolean;
+  hasRole:         (...roles: UserRole[]) => boolean;
+  isAdmin:         () => boolean;
 }
