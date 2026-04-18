@@ -1,14 +1,14 @@
 // ============================================================
-// WAREHOUSES PAGE — real backend data
-// GET    /api/v1/warehouses
-// POST   /api/v1/warehouses
-// PUT    /api/v1/warehouses/{id}
-// DELETE /api/v1/warehouses/{id}
+// WAREHOUSES PAGE — real backend with pagination + search
 // src/pages/WarehousesPage.tsx
 // ============================================================
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Warehouse, MoreHorizontal, Pencil, Trash2, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import {
+  Plus, Warehouse, MoreHorizontal, Pencil, Trash2, RefreshCw,
+  CheckCircle, XCircle, Power, PowerOff, ChevronLeft, ChevronRight,
+  Package, BarChart3, MapPin, User,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import PageTransition, { staggerItem, staggerContainer } from '@/components/PageTransition';
 import StatCard from '@/components/StatCard';
@@ -16,64 +16,74 @@ import { DataTable, type Column } from '@/shared/components/tables/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge }  from '@/components/ui/badge';
 import { Input }  from '@/components/ui/input';
-import { Label }  from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import WarehouseForm from '@/modules/warehouses/components/WarehouseForm';
 import {
-  useWarehouses, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse,
+  useWarehouses, useCreateWarehouse, useUpdateWarehouse,
+  useDeleteWarehouse, useActivateWarehouse, useDeactivateWarehouse,
   type WarehouseFormData,
 } from '@/modules/warehouses/services/warehouseApi';
 import type { Warehouse as WarehouseType } from '@/shared/types/domain.types';
-import { cn } from '@/lib/utils';
 
-const emptyForm: WarehouseFormData = {
-  name: '', code: '', city: '', state: '', country: 'India',
-  phone: '', email: '', isActive: true,
-};
+/** Build a display string from whatever address data is available */
+function getLocationDisplay(w: WarehouseType): string {
+  if (w.addressString && w.addressString.trim()) return w.addressString;
+  if (w.address) {
+    const parts = [
+      w.address.street,
+      w.address.city,
+      w.address.state,
+      w.address.pincode ? `- ${w.address.pincode}` : '',
+      w.address.country,
+    ].filter((p) => p && p.trim());
+    if (parts.length > 0) return parts.join(', ');
+  }
+  return '';
+}
 
 export default function WarehousesPage() {
-  const [showDialog, setShowDialog]   = useState(false);
-  const [editTarget, setEditTarget]   = useState<WarehouseType | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [form, setForm]               = useState<WarehouseFormData>(emptyForm);
+  const [showDialog, setShowDialog]       = useState(false);
+  const [editTarget, setEditTarget]       = useState<WarehouseType | null>(null);
+  const [deleteTarget, setDeleteTarget]   = useState<{ id: string; name: string } | null>(null);
+  const [searchTerm, setSearchTerm]       = useState('');
+  const [page, setPage]                  = useState(1);
+  const pageSize                          = 20;
 
-  const { data: warehouses = [], isLoading, error, refetch } = useWarehouses();
-  const createWarehouse = useCreateWarehouse();
-  const updateWarehouse = useUpdateWarehouse();
-  const deleteWarehouse = useDeleteWarehouse();
+  const { data: pagedResult, isLoading, error, refetch } = useWarehouses({
+    search: searchTerm || undefined,
+    pageNumber: page,
+    pageSize,
+  });
+
+  const warehouses  = pagedResult?.items ?? [];
+  const totalCount  = pagedResult?.totalCount ?? 0;
+  const totalPages  = pagedResult?.totalPages ?? 1;
+
+  const createWarehouse    = useCreateWarehouse();
+  const updateWarehouse    = useUpdateWarehouse();
+  const deleteWarehouse    = useDeleteWarehouse();
+  const activateWarehouse  = useActivateWarehouse();
+  const deactivateWarehouse = useDeactivateWarehouse();
 
   const stats = {
-    total:    warehouses.length,
-    active:   warehouses.filter((w) => w.isActive).length,
-    inactive: warehouses.filter((w) => !w.isActive).length,
+    total:       totalCount,
+    active:      warehouses.filter((w) => w.isActive).length,
+    inactive:    warehouses.filter((w) => !w.isActive).length,
+    stockLines:  warehouses.reduce((sum, w) => sum + (w.totalStockLines ?? 0), 0),
   };
 
-  const openAdd = () => { setEditTarget(null); setForm(emptyForm); setShowDialog(true); };
-  const openEdit = (w: WarehouseType) => {
-    setEditTarget(w);
-    setForm({
-      name:    w.name,
-      code:    w.code ?? '',
-      city:    w.city ?? '',
-      state:   w.state ?? '',
-      country: w.country ?? 'India',
-      phone:   w.phone ?? '',
-      email:   w.email ?? '',
-      isActive: w.isActive,
-    });
-    setShowDialog(true);
-  };
+  const openAdd = () => { setEditTarget(null); setShowDialog(true); };
+  const openEdit = (w: WarehouseType) => { setEditTarget(w); setShowDialog(true); };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) { toast.error('Warehouse name is required'); return; }
+  const handleSave = async (data: WarehouseFormData) => {
     try {
       if (editTarget) {
-        await updateWarehouse.mutateAsync({ id: editTarget.id, payload: form });
+        await updateWarehouse.mutateAsync({ id: editTarget.id, payload: data });
         toast.success('Warehouse updated');
       } else {
-        await createWarehouse.mutateAsync(form);
+        await createWarehouse.mutateAsync(data);
         toast.success('Warehouse created');
       }
       setShowDialog(false);
@@ -92,6 +102,25 @@ export default function WarehousesPage() {
     }
   };
 
+  const handleToggleActive = async (w: WarehouseType) => {
+    try {
+      if (w.isActive) {
+        await deactivateWarehouse.mutateAsync(w.id);
+        toast.success(`${w.name} deactivated`);
+      } else {
+        await activateWarehouse.mutateAsync(w.id);
+        toast.success(`${w.name} activated`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Status change failed');
+    }
+  };
+
+  const handleSearch = useCallback((value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  }, []);
+
   const columns: Column<WarehouseType>[] = [
     {
       key: 'name', label: 'Warehouse',
@@ -102,21 +131,65 @@ export default function WarehousesPage() {
           </div>
           <div>
             <p className="font-medium text-sm">{row.name}</p>
-            {row.code && <p className="text-xs text-muted-foreground font-mono">{row.code}</p>}
+            <p className="text-xs text-muted-foreground font-mono">{row.code}</p>
           </div>
         </div>
       ),
     },
     {
-      key: 'city', label: 'Location',
-      render: (_, row) => (
-        <span className="text-sm text-muted-foreground">
-          {[row.city, row.state, row.country].filter(Boolean).join(', ') || '—'}
+      key: 'location', label: 'Location',
+      render: (_, row) => {
+        const loc = getLocationDisplay(row);
+        return loc ? (
+          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            {loc}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground/40 italic">No address</span>
+        );
+      },
+    },
+    {
+      key: 'managerName', label: 'Manager',
+      render: (_, row) => row.managerName ? (
+        <span className="text-sm flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          {row.managerName}
         </span>
+      ) : (
+        <span className="text-xs text-muted-foreground/40 italic">Not assigned</span>
       ),
     },
-    { key: 'phone', label: 'Phone', render: (val) => <span className="text-sm font-mono text-muted-foreground">{(val as string) || '—'}</span> },
-    { key: 'email', label: 'Email', render: (val) => <span className="text-sm text-muted-foreground">{(val as string) || '—'}</span> },
+    {
+      key: 'totalStockLines', label: 'Stock Lines',
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
+          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm font-medium">{row.totalStockLines ?? 0}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'utilization', label: 'Utilization',
+      render: (_, row) => {
+        if (row.utilization == null) {
+          return <span className="text-xs text-muted-foreground/40 italic">N/A</span>;
+        }
+        const pct = row.utilization;
+        return (
+          <div className="flex items-center gap-2 min-w-[80px]">
+            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-green-500'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-muted-foreground w-9 text-right">{pct}%</span>
+          </div>
+        );
+      },
+    },
     {
       key: 'isActive', label: 'Status',
       render: (val) => val
@@ -140,7 +213,7 @@ export default function WarehousesPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">Warehouses</h1>
-            <p className="page-subtitle">{isLoading ? '...' : `${stats.total} warehouses`}</p>
+            <p className="page-subtitle">{isLoading ? '...' : `${totalCount} warehouses`}</p>
           </div>
           <Button size="sm" className="h-9 gap-2" onClick={openAdd}>
             <Plus className="h-4 w-4" /> Add Warehouse
@@ -148,15 +221,16 @@ export default function WarehousesPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
           </div>
         ) : (
           <motion.div variants={staggerContainer} initial="hidden" animate="visible"
-            className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="Total"    value={String(stats.total)}    icon={Warehouse}    changeType="neutral"  change="All warehouses" />
-            <StatCard title="Active"   value={String(stats.active)}   icon={CheckCircle}  changeType="positive" change="Operational" />
-            <StatCard title="Inactive" value={String(stats.inactive)} icon={XCircle}      changeType="neutral"  change="Offline" />
+            className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <StatCard title="Total"       value={String(stats.total)}      icon={Warehouse}   changeType="neutral"  change="All warehouses" />
+            <StatCard title="Active"      value={String(stats.active)}     icon={CheckCircle} changeType="positive" change="Operational" />
+            <StatCard title="Inactive"    value={String(stats.inactive)}   icon={XCircle}     changeType="neutral"  change="Offline" />
+            <StatCard title="Stock Lines" value={String(stats.stockLines)} icon={Package}     changeType="neutral"  change="Across all" />
           </motion.div>
         )}
 
@@ -166,7 +240,9 @@ export default function WarehousesPage() {
             columns={columns}
             isLoading={isLoading}
             searchable
-            searchPlaceholder="Search warehouses..."
+            searchValue={searchTerm}
+            onSearchChange={handleSearch}
+            searchPlaceholder="Search by name, code, or city..."
             emptyMessage="No warehouses found."
             actions={(row) => (
               <DropdownMenu>
@@ -175,9 +251,14 @@ export default function WarehousesPage() {
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuContent align="end" className="w-40">
                   <DropdownMenuItem onClick={() => openEdit(row)}>
                     <Pencil className="h-4 w-4 mr-2" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleToggleActive(row)}>
+                    {row.isActive
+                      ? <><PowerOff className="h-4 w-4 mr-2" /> Deactivate</>
+                      : <><Power className="h-4 w-4 mr-2" /> Activate</>}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ id: row.id, name: row.name })}>
@@ -189,61 +270,45 @@ export default function WarehousesPage() {
           />
         </motion.div>
 
-        {/* Add/Edit Dialog */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editTarget ? 'Edit Warehouse' : 'Add Warehouse'}</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-4 py-2">
-              <div className="col-span-2 space-y-1.5">
-                <Label>Name <span className="text-destructive">*</span></Label>
-                <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Mumbai Central" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Code</Label>
-                <Input value={form.code ?? ''} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} placeholder="e.g. WH-MUM-01" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>City</Label>
-                <Input value={form.city ?? ''} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} placeholder="Mumbai" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>State</Label>
-                <Input value={form.state ?? ''} onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))} placeholder="Maharashtra" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Country</Label>
-                <Input value={form.country ?? ''} onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))} placeholder="India" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={form.phone ?? ''} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+91..." />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={form.email ?? ''} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} placeholder="warehouse@company.com" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-              <Button
-                onClick={handleSave}
-                disabled={createWarehouse.isPending || updateWarehouse.isPending}
-              >
-                {editTarget ? 'Update' : 'Create'} Warehouse
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-1">
+            <p className="text-sm text-muted-foreground">
+              Showing {warehouses.length} of {totalCount}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="h-8 w-8"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+                Page {page} of {totalPages}
+              </span>
+              <Button variant="outline" size="icon" className="h-8 w-8"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
-        {/* Delete Dialog */}
+        <WarehouseForm
+          open={showDialog}
+          onOpenChange={setShowDialog}
+          warehouse={editTarget}
+          onSubmit={handleSave}
+          isLoading={createWarehouse.isPending || updateWarehouse.isPending}
+          mode="modal"
+        />
+
         <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Warehouse</AlertDialogTitle>
               <AlertDialogDescription>
-                Delete "{deleteTarget?.name}"? This cannot be undone.
+                Delete "{deleteTarget?.name}"? This action cannot be undone.
+                Any existing stock references will be preserved.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

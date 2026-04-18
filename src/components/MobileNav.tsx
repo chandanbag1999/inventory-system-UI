@@ -24,7 +24,7 @@ export default function MobileNav({ open, onClose }: Props) {
   if (!open) return null;
 
   const filteredNav = navigation
-    .map((g) => ({ ...g, items: g.items.filter((i) => user && i.roles.includes(user.role as import('@/types').UserRole)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => user && i.items.filter((item) => user && item.roles.includes(user.role as import('@/modules/auth/types/auth.types').UserRole))) }))
     .filter((g) => g.items.length > 0);
 
   return (

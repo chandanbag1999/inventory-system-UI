@@ -30,13 +30,14 @@ export default function DashboardPage() {
   const { user }     = useAuthStore();
 
   const { data: productsData,   isLoading: pLoad }  = useProducts({ pageSize: 100 });
-  const { data: warehouses = [], isLoading: wLoad } = useWarehouses();
+  const { data: warehousesData, isLoading: wLoad }  = useWarehouses({ pageSize: 100 });
   const { data: lowStock = [],   isLoading: sLoad } = useLowStockAlerts();
   const { data: suppliersData,   isLoading: supLoad } = useSuppliers();
   const { data: categories = [], isLoading: cLoad } = useCategories();
 
-  const products  = productsData?.items ?? [];
-  const suppliers = Array.isArray(suppliersData) ? suppliersData : (suppliersData as any)?.items ?? [];
+  const products   = productsData?.items ?? [];
+  const warehouses = warehousesData?.items ?? [];
+  const suppliers  = Array.isArray(suppliersData) ? suppliersData : (suppliersData as any)?.items ?? [];
 
   const stats = useMemo(() => ({
     totalProducts:  productsData?.totalCount ?? products.length,
@@ -44,9 +45,10 @@ export default function DashboardPage() {
     lowStockCount:  lowStock.length,
     criticalStock:  lowStock.filter((s) => s.quantityAvailable === 0).length,
     activeWarehouses: warehouses.filter((w) => w.isActive).length,
+    totalWarehouses:  warehouses.length,
     totalSuppliers: suppliers.length,
     totalCategories: Array.isArray(categories) ? categories.length : 0,
-  }), [products, lowStock, warehouses, suppliers, categories, productsData, suppliersData]);
+  }), [products, lowStock, warehouses, suppliers, categories, productsData, suppliersData, warehousesData]);
 
   const isLoading = pLoad || wLoad || sLoad || supLoad || cLoad;
 
@@ -86,7 +88,7 @@ export default function DashboardPage() {
             <StatCard
               title="Active Warehouses" value={String(stats.activeWarehouses)}
               icon={Warehouse} changeType="positive"
-              change={`of ${warehouses.length} total`}
+              change={`of ${stats.totalWarehouses} total`}
               onClick={() => navigate('/warehouses')}
             />
             <StatCard
@@ -171,7 +173,7 @@ export default function DashboardPage() {
                           <span className="text-sm font-medium truncate">{w.name}</span>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
-                          {[w.city, w.state].filter(Boolean).join(', ') || 'Location not set'}
+                          {w.addressString || 'Location not set'}
                         </p>
                         <Badge className={'mt-2 text-xs border-0 ' + (
                           w.isActive ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground')}>

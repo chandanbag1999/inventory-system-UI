@@ -31,6 +31,8 @@ export interface DataTableProps<T extends { id: string }> {
   isLoading?:     boolean;
   searchable?:    boolean;
   searchPlaceholder?: string;
+  searchValue?:   string;
+  onSearchChange?:(value: string) => void;
   onRowClick?:    (row: T) => void;
   actions?:       (row: T) => React.ReactNode;
   emptyMessage?:  string;
@@ -40,7 +42,7 @@ export interface DataTableProps<T extends { id: string }> {
   onSelect?:      (id: string) => void;
   onSelectAll?:   (ids: string[]) => void;
   toolbar?:       React.ReactNode;
-  footer?:        React.ReactNode;
+  footer?:       React.ReactNode;
   pageSize?:      number;
 }
 
@@ -56,26 +58,39 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 export function DataTable<T extends { id: string }>({
   data,
   columns,
-  isLoading       = false,
-  searchable      = true,
+  isLoading         = false,
+  searchable        = true,
   searchPlaceholder = 'Search...',
+  searchValue: controlledSearch,
+  onSearchChange,
   onRowClick,
   actions,
-  emptyMessage    = 'No data found.',
+  emptyMessage      = 'No data found.',
   defaultSort,
   rowClassName,
-  selectedIds     = [],
+  selectedIds       = [],
   onSelect,
   onSelectAll,
   toolbar,
   footer,
-  pageSize:       defaultPageSize = 10,
+  pageSize: defaultPageSize = 10,
 }: DataTableProps<T>) {
-  const [search,   setSearch]   = useState('');
+  const [internalSearch, setInternalSearch] = useState('');
   const [sortKey,  setSortKey]  = useState(defaultSort?.key  ?? '');
   const [sortDir,  setSortDir]  = useState<SortDir>(defaultSort?.dir ?? 'asc');
   const [page,     setPage]     = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+
+  // Use controlled search if provided, otherwise internal
+  const search = controlledSearch !== undefined ? controlledSearch : internalSearch;
+  const handleSearchChange = useCallback((value: string) => {
+    if (onSearchChange) {
+      onSearchChange(value);
+    } else {
+      setInternalSearch(value);
+    }
+    setPage(1);
+  }, [onSearchChange]);
 
   const toggleSort = useCallback((key: string) => {
     if (sortKey === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
@@ -127,12 +142,12 @@ export function DataTable<T extends { id: string }>({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
                 className="pl-9 h-9 text-sm"
               />
               {search && (
-                <button onClick={() => { setSearch(''); setPage(1); }}
+                <button onClick={() => handleSearchChange('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -236,7 +251,12 @@ export function DataTable<T extends { id: string }>({
                     const val = (row as Record<string, unknown>)[col.key];
                     return (
                       <td key={col.key} className={cn('py-3 px-4', col.className)}>
-                        {col.render ? col.render(val, row, index) : String(val ?? '-')}
+                        {col.render
+                          ? col.render(val, row, index)
+                          : (val != null && val !== '')
+                            ? String(val)
+                            : <span className="text-muted-foreground/40 text-xs italic">—</span>
+                        }
                       </td>
                     );
                   })}

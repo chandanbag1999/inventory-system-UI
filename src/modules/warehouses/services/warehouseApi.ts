@@ -1,39 +1,50 @@
 // ============================================================
 // WAREHOUSE API — React Query hooks
-// Backend: GET    /api/v1/warehouses?isActive=true
-//          GET    /api/v1/warehouses/{id}
-//          POST   /api/v1/warehouses   JSON
-//          PUT    /api/v1/warehouses/{id} JSON
-//          DELETE /api/v1/warehouses/{id}
 // src/modules/warehouses/services/warehouseApi.ts
 // ============================================================
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/shared/services/api/apiClient';
 import { API_ENDPOINTS } from '@/shared/services/api/endpoints';
-import { QUERY_KEYS } from '@/shared/services/api/queryKeys';
-import type { Warehouse } from '@/shared/types/domain.types';
+import { QUERY_KEYS }    from '@/shared/services/api/queryKeys';
+import type { Warehouse, PagedResult } from '@/shared/types/domain.types';
 
+// ── Form data — matches backend Create/Update commands ──────
 export interface WarehouseFormData {
-  name:          string;
-  code?:         string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?:         string;
-  state?:        string;
-  country?:      string;
-  postalCode?:   string;
-  phone?:        string;
-  email?:        string;
-  managerId?:    string;
-  isActive?:     boolean;
+  name:       string;
+  code?:      string;
+  phone?:     string;
+  email?:     string;
+  capacity?:  number | null;
+  managerId?: string | null;
+  version?:   number;
+  address?: {
+    street:  string;
+    city:    string;
+    state:   string;
+    pincode: string;
+    country: string;
+  } | null;
 }
 
+export interface WarehouseQueryParams {
+  isActive?:  boolean;
+  search?:    string;
+  pageNumber?:number;
+  pageSize?:  number;
+}
+
+// ── Raw API functions ───────────────────────────────────────
 export const warehouseApiClient = {
-  getAll: async (isActive?: boolean): Promise<Warehouse[]> => {
+  getAll: async (params: WarehouseQueryParams = {}): Promise<PagedResult<Warehouse>> => {
     const { data } = await apiClient.get(API_ENDPOINTS.WAREHOUSES.BASE, {
-      params: isActive !== undefined ? { isActive } : {},
+      params: {
+        isActive:   params.isActive,
+        search:     params.search || undefined,
+        pageNumber: params.pageNumber ?? 1,
+        pageSize:   params.pageSize   ?? 20,
+      },
     });
-    return data.data ?? [];
+    return data.data;
   },
 
   getById: async (id: string): Promise<Warehouse> => {
@@ -47,7 +58,24 @@ export const warehouseApiClient = {
   },
 
   update: async (id: string, payload: WarehouseFormData): Promise<Warehouse> => {
-    const { data } = await apiClient.put(API_ENDPOINTS.WAREHOUSES.BY_ID(id), payload);
+    // Strip `code` — UpdateWarehouseCommand has no Code property
+    const { code, ...updatePayload } = payload;
+    // Ensure version is a number (default 0 if undefined)
+    updatePayload.version = updatePayload.version ?? 0;
+    const { data } = await apiClient.put(
+      API_ENDPOINTS.WAREHOUSES.BY_ID(id),
+      updatePayload,
+    );
+    return data.data;
+  },
+
+  activate: async (id: string): Promise<Warehouse> => {
+    const { data } = await apiClient.patch(API_ENDPOINTS.WAREHOUSES.ACTIVATE(id));
+    return data.data;
+  },
+
+  deactivate: async (id: string): Promise<Warehouse> => {
+    const { data } = await apiClient.patch(API_ENDPOINTS.WAREHOUSES.DEACTIVATE(id));
     return data.data;
   },
 
@@ -56,10 +84,12 @@ export const warehouseApiClient = {
   },
 };
 
-export function useWarehouses(isActive?: boolean) {
+// ── React Query Hooks ───────────────────────────────────────
+
+export function useWarehouses(params: WarehouseQueryParams = {}) {
   return useQuery({
-    queryKey: [...QUERY_KEYS.WAREHOUSES, isActive],
-    queryFn:  () => warehouseApiClient.getAll(isActive),
+    queryKey: [...QUERY_KEYS.WAREHOUSES, params],
+    queryFn:  () => warehouseApiClient.getAll(params),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -89,10 +119,42 @@ export function useUpdateWarehouse() {
   });
 }
 
+export function useActivateWarehouse() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => warehouseApiClient.activate(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
+  });
+}
+
+export function useDeactivateWarehouse() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => warehouseApiClient.deactivate(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
+  });
+}
+
 export function useDeleteWarehouse() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => warehouseApiClient.delete(id),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.WAREHOUSES }); },
+  });
+}
+
+// ── Manager options (for form dropdown) ─────────────────────
+export function useManagerOptions() {
+  return useQuery({
+    queryKey: ['users', 'manager-options'] as const,
+    queryFn: async (): Promise<{ value: string; label: string }[]> => {
+      const { data } = await apiClient.get(API_ENDPOINTS.USERS.BASE, {
+        params: { pageSize: 100, isActive: true },
+      });
+      const users = data.data?.items ?? data.data ?? [];
+      return (Array.isArray(users) ? users : [])
+        .map((u: any) => ({ value: u.id, label: u.fullName }));
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }

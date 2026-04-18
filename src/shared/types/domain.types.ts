@@ -19,17 +19,15 @@ export interface Category {
   createdAt:   string;
   updatedAt:   string;
   children:    Category[];
-  // Computed helpers used in frontend components
   fullPath:    string;
   displayOrder:number;
   productCount:number;
-  // Optional fields from CategoryForm
   commissionRate?: number | null;
   metaTitle?:      string | null;
   metaDescription?:string | null;
 }
 
-// ── Product Image (matches ProductImageDto) ──────────────────
+// ── Product Image ───────────────────────────────────────────
 export interface ProductImage {
   id:           string;
   imageUrl:     string;
@@ -37,7 +35,7 @@ export interface ProductImage {
   displayOrder: number;
 }
 
-// ── Product (matches ProductDto) ────────────────────────────
+// ── Product ─────────────────────────────────────────────────
 export interface Product {
   id:           string;
   categoryId:   string;
@@ -51,21 +49,19 @@ export interface Product {
   costPrice:    number;
   reorderLevel: number;
   reorderQty:   number;
-  status:       string;        // 'Active' | 'Draft' | 'Archived' | 'Discontinued'
+  status:       string;
   weightKg?:    number | null;
   primaryImage?:string | null;
   images:       ProductImage[];
   totalStock:   number;
   createdAt:    string;
   updatedAt:    string;
-  // Legacy fields used in existing pages (mapped from DTO)
   price?:       number;
   stock?:       number;
   reservedStock?:number;
   warehouse?:   string;
 }
 
-// ── Product List (matches ProductListDto) ────────────────────
 export interface ProductListItem {
   id:           string;
   name:         string;
@@ -79,7 +75,7 @@ export interface ProductListItem {
   createdAt:    string;
 }
 
-// ── Supplier (matches SupplierDto) ──────────────────────────
+// ── Supplier ────────────────────────────────────────────────
 export interface Supplier {
   id:           string;
   name:         string;
@@ -98,7 +94,6 @@ export interface Supplier {
   isActive:     boolean;
   createdAt:    string;
   updatedAt:    string;
-  // Legacy / UI helpers
   rating?:      number;
   status?:      string;
   category?:    string;
@@ -106,32 +101,37 @@ export interface Supplier {
   totalValue?:  number;
 }
 
-// ── Warehouse (matches WarehouseDto) ─────────────────────────
-export interface Warehouse {
-  id:          string;
-  name:        string;
-  code?:       string | null;
-  addressLine1?:string | null;
-  addressLine2?:string | null;
-  city?:       string | null;
-  state?:      string | null;
-  country?:    string | null;
-  postalCode?: string | null;
-  phone?:      string | null;
-  email?:      string | null;
-  managerId?:  string | null;
-  isActive:    boolean;
-  createdAt:   string;
-  updatedAt:   string;
-  // Legacy / UI helpers
-  location?:   string;
-  capacity?:   number;
-  utilization?:number;
-  manager?:    string;
-  status?:     string;
+// ── Warehouse Address (matches AddressDto) ──────────────────
+export interface WarehouseAddress {
+  street:  string;
+  city:    string;
+  state:   string;
+  pincode: string;
+  country: string;
 }
 
-// ── Stock (matches StockDto) ─────────────────────────────────
+// ── Warehouse (matches WarehouseDto + WarehouseListDto) ─────
+export interface Warehouse {
+  id:              string;
+  name:            string;
+  code:            string;
+  isActive:        boolean;
+  status:          string;
+  phone?:          string | null;
+  email?:          string | null;
+  capacity?:       number | null;
+  utilization?:    number | null;
+  managerId?:      string | null;
+  managerName?:    string | null;
+  totalStockLines: number;
+  address?:        WarehouseAddress | null;
+  addressString?:  string | null;
+  version:         number;
+  createdAt:       string;
+  updatedAt:       string;
+}
+
+// ── Stock ───────────────────────────────────────────────────
 export interface Stock {
   id:              string;
   productId:       string;
@@ -147,27 +147,25 @@ export interface Stock {
   updatedAt:       string;
 }
 
-// ── Stock Movement ───────────────────────────────────────────
 export interface StockMovement {
   id:            string;
   productId:     string;
   product?:      string;
   sku?:          string;
   warehouseId?:  string;
-  type:          string;        // 'StockIn' | 'StockOut' | 'Transfer' | 'Adjustment' | 'Reserved' | 'Released'
+  type:          string;
   quantity:      number;
   reference?:    string | null;
   notes?:        string | null;
   createdAt:     string;
   createdBy?:    string | null;
-  // Legacy UI fields
   fromWarehouse?:string;
   toWarehouse?:  string;
   date?:         string;
   reason?:       string;
 }
 
-// ── Purchase Order Item ──────────────────────────────────────
+// ── Purchase Order ──────────────────────────────────────────
 export interface PurchaseOrderItem {
   id:               string;
   productId:        string;
@@ -179,7 +177,6 @@ export interface PurchaseOrderItem {
   totalCost:        number;
 }
 
-// ── Purchase Order (matches PurchaseOrderDto) ────────────────
 export interface PurchaseOrder {
   id:              string;
   orderNumber:     string;
@@ -199,7 +196,7 @@ export interface PurchaseOrder {
   receivedAt?:     string | null;
 }
 
-// ── Sales Order Item ─────────────────────────────────────────
+// ── Sales Order ─────────────────────────────────────────────
 export interface SalesOrderItem {
   id:          string;
   productId:   string;
@@ -211,7 +208,6 @@ export interface SalesOrderItem {
   totalPrice:  number;
 }
 
-// ── Sales Order (matches SalesOrderDto) ─────────────────────
 export interface SalesOrder {
   id:             string;
   orderNumber:    string;
@@ -233,7 +229,6 @@ export interface SalesOrder {
   deliveredAt?:   string | null;
 }
 
-// ── Legacy order shape (used in existing OrdersPage) ─────────
 export interface Order {
   id:              string;
   orderNumber:     string;
@@ -247,7 +242,6 @@ export interface Order {
   warehouse?:      string;
 }
 
-// ── Delivery ─────────────────────────────────────────────────
 export interface Delivery {
   id:            string;
   orderId:       string;
@@ -260,7 +254,6 @@ export interface Delivery {
   earnings?:     number;
 }
 
-// ── Return Request ───────────────────────────────────────────
 export interface ReturnItem {
   productId:   string;
   productName: string;
@@ -282,7 +275,6 @@ export interface ReturnRequest {
   createdAt:    string;
 }
 
-// ── Notification ─────────────────────────────────────────────
 export interface Notification {
   id:         string;
   type:       string;
@@ -294,7 +286,6 @@ export interface Notification {
   priority?:  string;
 }
 
-// ── Audit Log ────────────────────────────────────────────────
 export interface AuditLog {
   id:          string;
   userId:      string;
@@ -309,7 +300,6 @@ export interface AuditLog {
   ipAddress?:  string;
 }
 
-// ── Dashboard Metrics ────────────────────────────────────────
 export interface DashboardMetrics {
   totalRevenue:      number;
   revenueChange:     number;
@@ -321,7 +311,7 @@ export interface DashboardMetrics {
   activeWarehouses:  number;
 }
 
-// ── Paged Result (matches backend PagedResult<T>) ────────────
+// ── Paged Result (matches backend PagedResult<T>) ───────────
 export interface PagedResult<T> {
   items:       T[];
   totalCount:  number;
